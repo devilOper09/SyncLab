@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom'
 import UserNavbar from '../components/UserNavbar'
 import Sidebar from '../components/Sidebar'
 import api from '../Api/Api.js'
@@ -127,10 +127,32 @@ const GoldBadge = () => (
 function YourProfile() {
   const navigate = useNavigate()
   const loggedInUserId = localStorage.getItem("user_id")
+  const { username: usernameParam } = useParams()
   const [searchParams] = useSearchParams()
   const profileIdParam = searchParams.get("id")
-  const user_id = profileIdParam || loggedInUserId
-  const isOwnProfile = !profileIdParam || profileIdParam === loggedInUserId
+
+  const [targetUserIdResolved, setTargetUserIdResolved] = useState(profileIdParam || loggedInUserId)
+
+  // If URL has /user/:username, resolve username to user id
+  useEffect(() => {
+    if (usernameParam) {
+      api.get(`/follow/search?q=${usernameParam}`).then(res => {
+        if (res.data.success && res.data.users.length > 0) {
+          const matched = res.data.users.find(u => u.username.toLowerCase() === usernameParam.toLowerCase())
+          if (matched) {
+            setTargetUserIdResolved(String(matched.id))
+          }
+        }
+      }).catch(console.error)
+    } else if (profileIdParam) {
+      setTargetUserIdResolved(profileIdParam)
+    } else {
+      setTargetUserIdResolved(loggedInUserId)
+    }
+  }, [usernameParam, profileIdParam, loggedInUserId])
+
+  const user_id = targetUserIdResolved || loggedInUserId
+  const isOwnProfile = !usernameParam && (!profileIdParam || profileIdParam === loggedInUserId) || (user_id === loggedInUserId)
 
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
@@ -185,7 +207,9 @@ function YourProfile() {
   const handleCropComplete = async (croppedBlob) => {
     setCropperImage(null)
     const file = new File([croppedBlob], "cropped-image.jpg", { type: "image/jpeg" })
-    await handleFileUpload(file, cropperCallback)
+    if (cropperCallback) {
+      await handleFileUpload(file, cropperCallback)
+    }
   }
 
   // Audio player global context
@@ -345,9 +369,9 @@ function YourProfile() {
   }, [user_id, isOwnProfile])
 
   const fetchFollowStatus = async () => {
-    if (!loggedInUserId || !profileIdParam) return
+    if (!loggedInUserId || !user_id) return
     try {
-      const res = await api.get(`/follow/status/${profileIdParam}`, {
+      const res = await api.get(`/follow/status/${user_id}`, {
         params: { user_id: loggedInUserId }
       })
       setIsFollowing(res.data.isFollowing)
@@ -1347,7 +1371,11 @@ function YourProfile() {
                         key={u.id}
                         onClick={() => {
                           setShowFollowModal(null)
-                          navigate(`/profile?id=${u.id}`)
+                          if (String(u.id) === String(loggedInUserId)) {
+                            navigate('/profile')
+                          } else {
+                            navigate(`/profile?id=${u.id}`)
+                          }
                         }}
                         className="flex items-center justify-between p-2 rounded-xl hover:bg-white/5 transition cursor-pointer"
                       >
@@ -1370,21 +1398,36 @@ function YourProfile() {
                           </div>
                         </div>
 
-                        {/* Follow/Following button inside modal */}
+                        {/* Follow/Following & Message button inside modal */}
                         {!isSelf && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleFollowModalToggle(u)
-                            }}
-                            className={`px-3 py-1 rounded-lg text-[10px] font-semibold transition cursor-pointer ${
-                              u.is_following
-                                ? "bg-white/10 text-white border border-white/10 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/30"
-                                : "bg-indigo-600 text-white hover:bg-indigo-500"
-                            }`}
-                          >
-                            {u.is_following ? "Following" : "Follow"}
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => {
+                                setShowFollowModal(null)
+                                api.post("/social/conversations", {
+                                  user_id: loggedInUserId,
+                                  target_id: u.id
+                                }).then(res => {
+                                  if (res.data.success) {
+                                    navigate(`/message?convId=${res.data.conversationId}`)
+                                  }
+                                }).catch(() => toast.error("Failed to start conversation."))
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 transition"
+                            >
+                              Message
+                            </button>
+                            <button
+                              onClick={() => handleFollowModalToggle(u)}
+                              className={`px-3 py-1 rounded-lg text-[10px] font-semibold transition cursor-pointer ${
+                                u.is_following
+                                  ? "bg-white/10 text-white border border-white/10 hover:bg-red-600/20 hover:text-red-400 hover:border-red-500/30"
+                                  : "bg-indigo-600 text-white hover:bg-indigo-500"
+                              }`}
+                            >
+                              {u.is_following ? "Following" : "Follow"}
+                            </button>
+                          </div>
                         )}
                       </div>
                     )

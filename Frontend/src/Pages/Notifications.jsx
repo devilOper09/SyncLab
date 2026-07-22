@@ -58,7 +58,7 @@ function Notifications() {
         {/* Main content — offset for sidebar */}
         <div className="ml-64 flex-1 p-8 pb-16">
           <div className="max-w-2xl mx-auto">
-            <h1 className="text-2xl font-bold mb-6 bg-gradient-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent flex items-center gap-2">
+            <h1 className="text-2xl font-bold mb-6 bg-linear-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent flex items-center gap-2">
               <Bell className="w-6 h-6 text-indigo-400" /> Notifications
             </h1>
 
@@ -98,12 +98,26 @@ function Notifications() {
                       {/* Notification Text */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-200 leading-relaxed">
-                          <span className="font-bold text-white hover:underline inline-flex items-center gap-0.5">
-                            {n.display_name || "Unknown Artist"}
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (String(n.actor_id) === String(currentUserId)) {
+                                navigate('/profile')
+                              } else {
+                                navigate(`/profile?id=${n.actor_id}`)
+                              }
+                            }}
+                            className="font-bold text-white hover:underline hover:text-indigo-400 inline-flex items-center gap-0.5"
+                          >
+                            {n.display_name || n.username || "Unknown Artist"}
                             {n.is_founder === true && <GoldBadge />}
                           </span>{" "}
                           <span className="text-gray-400">
-                            {n.type === 'follow' ? "started following you." : "sent you a message."}
+                            {n.type === 'follow' ? "started following you." :
+                             n.type === 'collab_request' ? "sent you a collaboration request." :
+                             n.type === 'collab_accepted' ? "accepted your collaboration request." :
+                             n.type === 'collab_declined' ? "declined your collaboration request." :
+                             "sent you a message."}
                           </span>
                         </p>
                         <p className="text-[10px] text-gray-500 mt-1">

@@ -134,7 +134,7 @@ function Search() {
         {/* Main content — offset for sidebar */}
         <div className="ml-64 flex-1 p-8 pb-16">
           <div className="max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold mb-6 bg-gradient-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold mb-6 bg-linear-to-r from-indigo-400 to-blue-400 bg-clip-text text-transparent">
               Discover Creators
             </h1>
 
@@ -196,7 +196,13 @@ function Search() {
                   return (
                     <div
                       key={user.id}
-                      onClick={() => navigate(`/profile?id=${user.id}`)}
+                      onClick={() => {
+                        if (String(user.id) === String(currentUserId)) {
+                          navigate('/profile')
+                        } else {
+                          navigate(`/profile?id=${user.id}`)
+                        }
+                      }}
                       className="group bg-white/5 border border-white/10 rounded-2xl p-4 flex items-start gap-4 hover:border-indigo-500/30 hover:shadow-[0_0_20px_rgba(99,102,241,0.05)] transition-all duration-300 cursor-pointer"
                     >
                       {/* Avatar */}

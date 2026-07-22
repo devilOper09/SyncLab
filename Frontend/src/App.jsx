@@ -14,6 +14,7 @@ import Snippets from "./Pages/Snippets"
 import YourProfile from "./Pages/YourProfile"
 import SetUpProfile from "./Pages/setUpProfile"
 import Messages from "./Pages/Messages"
+import CollabRequests from "./Pages/Collabs"
 
 // Handles the redirect from Google OAuth — reads query params, stores in localStorage, redirects
 function GoogleAuthCallback() {
@@ -59,7 +60,7 @@ function MiniWaveform({ isPlaying }) {
   )
 
   return (
-    <div className="flex items-end gap-[3px] h-5 px-1 shrink-0">
+    <div className="flex items-end gap-0.75 h-5 px-1 shrink-0">
       {barDurations.map((dur, i) => (
         <div
           key={i}
@@ -68,7 +69,7 @@ function MiniWaveform({ isPlaying }) {
             animationDuration: isPlaying ? `${dur}s` : '0s',
             animationPlayState: isPlaying ? 'running' : 'paused',
           }}
-          className="w-[3px] bg-indigo-400 rounded-full animate-soundwave h-1"
+          className="w-0.75 bg-indigo-400 rounded-full animate-soundwave h-1"
         />
       ))}
     </div>
@@ -80,8 +81,8 @@ function MiniPlayer() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  // Don't show mini player while the expanded player is visible on the profile page
-  if (!activeTrack || pathname === '/profile') return null
+  // Don't show mini player while the expanded player is visible on the profile page or home page
+  if (!activeTrack || pathname === '/profile' || pathname === '/home') return null
 
   return (
     <div className="fixed bottom-6 right-6 z-50 w-80 bg-slate-900/95 backdrop-blur-md border border-white/10 rounded-2xl p-3 shadow-2xl flex items-center gap-3">
@@ -143,7 +144,9 @@ function App() {
         <Route path="/notification" element={<Notifications />} />
         <Route path="/snippets" element={<Snippets />} />
         <Route path="/profile" element={<YourProfile />} />
+        <Route path="/user/:username" element={<YourProfile />} />
         <Route path="/message" element={<Messages />} />
+        <Route path="/collabs" element={<CollabRequests />} />
       </Routes>
 
       <MiniPlayer />

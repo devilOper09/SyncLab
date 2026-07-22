@@ -1,17 +1,82 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { Play, Pause, Heart, MessageSquare, Repeat, Bookmark, Share2, UserPlus, UserCheck, Sparkles, Flame, Music, Users, ArrowRight, Plus, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import UserNavbar from '../components/UserNavbar';
 import Sidebar from '../components/Sidebar';
+import StoriesSection from '../components/Stories';
 import { useAudioPlayer } from '../context/AudioPlayerContext.jsx';
 import toast from 'react-hot-toast';
 import api from '../Api/Api.js';
+import WaveSurfer from 'wavesurfer.js';
 
 const GoldBadge = () => (
   <svg className="w-4 h-4 text-yellow-500 fill-current inline-block ml-1.5 shrink-0 align-middle" viewBox="0 0 24 24" title="Verified Artist">
     <path d="M23 12l-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.69L23 12zm-13 5l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z" />
   </svg>
 );
+
+const WaveformPlayer = ({ post, isPlaying }) => {
+  const waveformRef = useRef(null);
+  const wavesurferRef = useRef(null);
+  const { seekTrack, audioRef, currentTime, duration } = useAudioPlayer();
+
+  useEffect(() => {
+    if (!waveformRef.current) return;
+    const audio = audioRef?.current;
+    if (!audio || !post.audio_url) return;
+
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy();
+      wavesurferRef.current = null;
+    }
+
+    const ws = WaveSurfer.create({
+      container: waveformRef.current,
+      waveColor: 'rgba(255, 255, 255, 0.18)',
+      progressColor: '#6366f1',
+      cursorColor: 'rgba(99,102,241,0.6)',
+      barWidth: 2,
+      barGap: 2,
+      barRadius: 2,
+      height: 48,
+      normalize: true,
+      interact: true,
+      media: audio,
+    });
+
+    ws.on('seek', (progress) => {
+      const dur = audio.duration;
+      if (dur && isFinite(dur)) {
+        seekTrack(progress * dur);
+      }
+    });
+
+    wavesurferRef.current = ws;
+
+    return () => {
+      ws.destroy();
+      wavesurferRef.current = null;
+    };
+  }, [post._id || post.id, audioRef]);
+
+  const formatTime = (secs) => {
+    if (!secs || isNaN(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  return (
+    <div className="w-full flex flex-col gap-1">
+      <div ref={waveformRef} className="w-full cursor-pointer" />
+      <div className="flex items-center justify-between text-[9px] text-gray-500 px-0.5">
+        <span>{formatTime(currentTime)}</span>
+        <span>{formatTime(duration)}</span>
+      </div>
+    </div>
+  );
+};
 
 const GENRES = [
   "All",
@@ -27,6 +92,7 @@ const GENRES = [
 ];
 
 function Home() {
+  const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [users, setUsers] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -37,10 +103,27 @@ function Home() {
   const [repostedPosts, setRepostedPosts] = useState({});
   const [followingStatus, setFollowingStatus] = useState({});
 
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
   const loggedInUserId = localStorage.getItem("user_id");
   const loggedInUsername = localStorage.getItem("display_name") || "Tensick";
 
   const { activeTrack, isPlaying, playTrack } = useAudioPlayer();
+
+  const [expandedPostId, setExpandedPostId] = useState(null);
+
+  const handlePlayPause = (post) => {
+    setExpandedPostId(post._id || post.id);
+    playTrack({
+      id: post._id || post.id,
+      caption: post.caption,
+      audio_url: post.audio_url,
+      cover_url: post.cover_url,
+      artistName: post.userName
+    });
+  };
 
   const fetchPosts = async () => {
     try {
@@ -77,9 +160,30 @@ function Home() {
   };
 
   useEffect(() => {
-    void fetchPosts().then(setPosts);
+    setLoading(true);
+    fetchPosts().then(data => {
+      setPosts(data);
+      setLoading(false);
+    });
     void fetchUsers();
   }, []);
+
+  // Infinite scroll simulation
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 100) {
+        if (!loading && hasMore) {
+          setLoading(true);
+          setTimeout(() => {
+            setPosts(prev => [...prev, ...prev.slice(0, 4)]); // duplicate posts to simulate infinite scroll
+            setLoading(false);
+          }, 1000);
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [loading, hasMore]);
 
   const handlePost = async () => {
     if (!caption.trim()) return;
@@ -182,6 +286,9 @@ function Home() {
           
           {/* Center Feed Area */}
           <div className="space-y-6 min-w-0">
+
+            {/* Stories Component */}
+            <StoriesSection />
             
             {/* 1. Hero / For You Section */}
             {featuredBeat && (
@@ -514,7 +621,13 @@ function Home() {
                       className="group relative w-40 bg-white/5 border border-white/10 rounded-xl p-3 shrink-0 hover:bg-white/10 hover:border-white/20 hover:-translate-y-1 transition-all duration-300 shadow-lg flex flex-col items-center text-center snap-start"
                     >
                       {/* Avatar */}
-                      <div className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-800 mb-2 border border-white/10 shadow-md">
+                      <div 
+                        onClick={() => {
+                          if (String(user.id) === String(loggedInUserId)) navigate('/profile')
+                          else navigate(`/profile?id=${user.id}`)
+                        }}
+                        className="relative w-16 h-16 rounded-full overflow-hidden bg-slate-800 mb-2 border border-white/10 shadow-md cursor-pointer hover:border-indigo-400 transition"
+                      >
                         {user.avatar_url ? (
                           <img 
                             src={user.avatar_url} 
@@ -529,7 +642,13 @@ function Home() {
                       </div>
                       {/* Details */}
                       <div className="space-y-0.5 w-full">
-                        <h4 className="font-bold text-white text-xs truncate flex items-center justify-center gap-0.5">
+                        <h4 
+                          onClick={() => {
+                            if (String(user.id) === String(loggedInUserId)) navigate('/profile')
+                            else navigate(`/profile?id=${user.id}`)
+                          }}
+                          className="font-bold text-white text-xs truncate flex items-center justify-center gap-0.5 cursor-pointer hover:text-indigo-400 transition"
+                        >
                           {user.display_name || user.username}
                           {user.is_founder && <GoldBadge />}
                         </h4>
@@ -568,117 +687,205 @@ function Home() {
             )}
 
             {/* 7. Feed Section */}
-            <section className="space-y-6 pt-4 border-t border-white/5">
+            <section className="space-y-4 pt-4 border-t border-white/5">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Music size={20} className="text-indigo-400" />
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Music size={18} className="text-indigo-400" />
                   Recent Activity
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {filteredPosts.map((post) => {
-                  const isCurrent = activeTrack?.id === (post._id || post.id);
-                  return (
-                    <div 
-                      key={post._id || post.id} 
-                      className="group bg-white/5 border border-white/10 rounded-2xl p-5 hover:bg-white/10 hover:border-white/20 transition-all duration-300 shadow-lg flex flex-col justify-between space-y-4"
-                    >
-                      {/* Header */}
+              {loading && posts.length === 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[1, 2, 3, 4].map((n) => (
+                    <div key={n} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3 animate-pulse">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-indigo-950/50 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-sm">
-                            {post.userName.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-white text-sm flex items-center gap-1">
-                              @{post.userName}
-                              {post.is_founder && <GoldBadge />}
-                            </h4>
-                            <p className="text-[10px] text-gray-500">Posted a track</p>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-white/10" />
+                          <div className="space-y-1">
+                            <div className="w-20 h-3 bg-white/10 rounded" />
+                            <div className="w-12 h-2 bg-white/10 rounded" />
                           </div>
                         </div>
-                        {post.genre && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                            {post.genre}
-                          </span>
-                        )}
+                        <div className="w-10 h-4 bg-white/10 rounded" />
                       </div>
-
-                      {/* Content / Artwork */}
-                      <div className="space-y-3">
-                        <p className="text-sm text-gray-300 line-clamp-3">
-                          {post.caption}
-                        </p>
-                        {post.audio_url && (
-                          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-800 border border-white/5 shadow-inner flex items-center justify-center">
-                            {post.cover_url ? (
-                              <img 
-                                src={post.cover_url} 
-                                alt={post.caption} 
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                              />
-                            ) : (
-                              <div className="text-indigo-400 text-4xl">🎵</div>
-                            )}
-                            {/* Play Button Overlay */}
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                              <button 
-                                onClick={() => playTrack({
-                                  id: post._id || post.id,
-                                  caption: post.caption,
-                                  audio_url: post.audio_url,
-                                  cover_url: post.cover_url,
-                                  artistName: post.userName
-                                })}
-                                className="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-500 hover:scale-105 transition-all duration-300 shadow-lg"
-                              >
-                                {isCurrent && isPlaying ? (
-                                  <Pause size={24} />
-                                ) : (
-                                  <Play size={24} className="ml-0.5" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center justify-between pt-3 border-t border-white/5 text-gray-400 text-xs">
-                        <button 
-                          onClick={() => toggleLike(post._id || post.id)}
-                          className={`flex items-center gap-1.5 hover:text-red-500 transition-colors ${likedPosts[post._id || post.id] ? "text-red-500" : ""}`}
-                        >
-                          <Heart size={16} className={likedPosts[post._id || post.id] ? "fill-current" : ""} />
-                          <span>Like</span>
-                        </button>
-                        <button 
-                          onClick={() => toast.success("Comments section coming soon!")}
-                          className="flex items-center gap-1.5 hover:text-indigo-400 transition-colors"
-                        >
-                          <MessageSquare size={16} />
-                          <span>Comment</span>
-                        </button>
-                        <button 
-                          onClick={() => toggleRepost(post._id || post.id)}
-                          className={`flex items-center gap-1.5 hover:text-green-500 transition-colors ${repostedPosts[post._id || post.id] ? "text-green-500" : ""}`}
-                        >
-                          <Repeat size={16} />
-                          <span>Repost</span>
-                        </button>
-                        <button 
-                          onClick={() => toggleSave(post._id || post.id)}
-                          className={`flex items-center gap-1.5 hover:text-indigo-400 transition-colors ${savedPosts[post._id || post.id] ? "text-indigo-400" : ""}`}
-                        >
-                          <Bookmark size={16} className={savedPosts[post._id || post.id] ? "fill-current" : ""} />
-                          <span>Save</span>
-                        </button>
+                      <div className="space-y-2">
+                        <div className="w-full h-3 bg-white/10 rounded" />
+                        <div className="w-full aspect-square bg-white/10 rounded-lg" />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : filteredPosts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center space-y-3 bg-white/5 border border-white/10 rounded-2xl p-6">
+                  <div className="w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400 text-xl">
+                    🎵
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-white">No tracks found</h4>
+                    <p className="text-xs text-gray-400">Be the first to upload a track in this genre!</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredPosts.map((post) => {
+                    const isCurrent = activeTrack?.id === (post._id || post.id);
+                    const isExpanded = expandedPostId === (post._id || post.id);
+                    const uploadTime = post.created_at ? new Date(post.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Recently';
+                    return (
+                      <div 
+                        key={post._id || post.id} 
+                        className={`group bg-white/5 border rounded-xl p-4 hover:bg-white/10 hover:border-white/20 hover:-translate-y-0.5 transition-all duration-300 shadow-lg flex flex-col justify-between space-y-3 ${
+                          isCurrent && isPlaying ? "border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.15)]" : "border-white/10"
+                        }`}
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between">
+                          <div 
+                            onClick={() => {
+                              if (String(post.user_id) === String(loggedInUserId)) navigate('/profile')
+                              else navigate(`/profile?id=${post.user_id}`)
+                            }}
+                            className="flex items-center gap-2.5 min-w-0 cursor-pointer group/user"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-indigo-950/50 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0 group-hover/user:border-indigo-400 transition">
+                              {post.userName.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-white text-xs flex items-center gap-1 truncate group-hover/user:text-indigo-400 transition">
+                                @{post.userName}
+                                {post.is_founder && <GoldBadge />}
+                              </h4>
+                              <p className="text-[9px] text-gray-500">{uploadTime}</p>
+                            </div>
+                          </div>
+                          {post.genre && (
+                            <span className="text-[9px] font-semibold px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+                              {post.genre}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Content / Artwork / Waveform */}
+                        <div className="space-y-2">
+                          <p className="text-xs text-gray-300 line-clamp-2">
+                            {post.caption}
+                          </p>
+                          {post.audio_url && (
+                            <div className="flex flex-col gap-3">
+                              {isExpanded ? (
+                                <div className="flex gap-4 items-center bg-black/20 p-3 rounded-lg border border-white/5">
+                                  {/* Artwork on the left */}
+                                  <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-slate-800 shrink-0 shadow-md">
+                                    {post.cover_url ? (
+                                      <img 
+                                        src={post.cover_url} 
+                                        alt={post.caption} 
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-indigo-950/40 text-indigo-400 text-xl font-bold">
+                                        🎵
+                                      </div>
+                                    )}
+                                    {/* Play/Pause Overlay */}
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                      <button 
+                                        onClick={() => handlePlayPause(post)}
+                                        className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-500 transition-colors"
+                                      >
+                                        {isCurrent && isPlaying ? (
+                                          <Pause size={14} />
+                                        ) : (
+                                          <Play size={14} className="ml-0.5" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {/* Waveform on the right */}
+                                  <div className="flex-1 min-w-0">
+                                    <WaveformPlayer post={post} isPlaying={isCurrent && isPlaying} />
+                                  </div>
+                                  {/* Collapse Button */}
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedPostId(null);
+                                    }}
+                                    className="text-gray-500 hover:text-white transition-colors shrink-0"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-slate-800 border border-white/5 shadow-inner flex items-center justify-center">
+                                  {post.cover_url ? (
+                                    <img 
+                                      src={post.cover_url} 
+                                      alt={post.caption} 
+                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    />
+                                  ) : (
+                                    <div className="text-indigo-400 text-3xl">🎵</div>
+                                  )}
+                                  {/* Play Button Overlay - Show only on hover */}
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                                    <button 
+                                      onClick={() => handlePlayPause(post)}
+                                      className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-500 hover:scale-105 transition-all duration-300 shadow-lg"
+                                    >
+                                      <Play size={20} className="ml-0.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5 text-gray-400 text-[10px]">
+                          <button 
+                            onClick={() => toggleLike(post._id || post.id)}
+                            className={`flex items-center gap-1 hover:text-red-500 transition-colors ${likedPosts[post._id || post.id] ? "text-red-500" : ""}`}
+                          >
+                            <Heart size={14} className={likedPosts[post._id || post.id] ? "fill-current" : ""} />
+                            <span>{likedPosts[post._id || post.id] ? 1 : 0}</span>
+                          </button>
+                          <button 
+                            onClick={() => toast.success("Comments section coming soon!")}
+                            className="flex items-center gap-1 hover:text-indigo-400 transition-colors"
+                          >
+                            <MessageSquare size={14} />
+                            <span>0</span>
+                          </button>
+                          <button 
+                            onClick={() => toggleRepost(post._id || post.id)}
+                            className={`flex items-center gap-1 hover:text-green-500 transition-colors ${repostedPosts[post._id || post.id] ? "text-green-500" : ""}`}
+                          >
+                            <Repeat size={14} />
+                            <span>{repostedPosts[post._id || post.id] ? 1 : 0}</span>
+                          </button>
+                          <button 
+                            onClick={() => toggleSave(post._id || post.id)}
+                            className={`flex items-center gap-1 hover:text-indigo-400 transition-colors ${savedPosts[post._id || post.id] ? "text-indigo-400" : ""}`}
+                          >
+                            <Bookmark size={14} className={savedPosts[post._id || post.id] ? "fill-current" : ""} />
+                            <span>Save</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Infinite Scroll Loader */}
+              {loading && posts.length > 0 && (
+                <div className="flex justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
             </section>
 
           </div>
@@ -696,8 +903,14 @@ function Home() {
                 <div className="space-y-3">
                   {users.slice(0, 4).map((user) => (
                     <div key={user.id} className="flex items-center justify-between gap-4 p-2 rounded-xl hover:bg-white/5 transition-all duration-200">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border border-white/10 shrink-0">
+                      <div 
+                        onClick={() => {
+                          if (String(user.id) === String(loggedInUserId)) navigate('/profile')
+                          else navigate(`/profile?id=${user.id}`)
+                        }}
+                        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer group/sub"
+                      >
+                        <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 border border-white/10 shrink-0 group-hover/sub:border-indigo-400 transition">
                           {user.avatar_url ? (
                             <img src={user.avatar_url} alt={user.display_name} className="w-full h-full object-cover" />
                           ) : (
@@ -707,7 +920,7 @@ function Home() {
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h5 className="text-xs font-bold text-white truncate flex items-center gap-1">
+                          <h5 className="text-xs font-bold text-white truncate flex items-center gap-1 group-hover/sub:text-indigo-400 transition">
                             <span className="truncate">{user.display_name || user.username}</span>
                             {user.is_founder && <GoldBadge />}
                           </h5>

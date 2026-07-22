@@ -1,6 +1,6 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { User, Users, Bell, TrendingUp, Music, Search } from 'lucide-react'
+import { User, Users, Bell, TrendingUp, Music, Search, Handshake } from 'lucide-react'
 import { useNotifications } from '../context/NotificationContext.jsx'
 
 function Sidebar() {
@@ -43,6 +43,7 @@ function Sidebar() {
     <div className="w-64 h-[calc(100vh-65px)] bg-black/90 backdrop-blur-md text-white p-4 flex flex-col fixed left-0 top-[65px] border-r border-white/10 z-40">
       <ul className="space-y-2">
         {sidebarLink("/profile", "Your Profile", User)}
+        {sidebarLink("/collabs", "Collab Requests", Handshake)}
         {sidebarLink("/artists", "Artists", Users)}
         {sidebarLink("/notification", "Notifications", Bell)}
         {sidebarLink("/trending", "Trending", TrendingUp)}
