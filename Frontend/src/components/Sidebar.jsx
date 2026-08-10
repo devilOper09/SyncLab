@@ -47,7 +47,7 @@ function Sidebar() {
         {sidebarLink("/artists", "Artists", Users)}
         {sidebarLink("/notification", "Notifications", Bell)}
         {sidebarLink("/trending", "Trending", TrendingUp)}
-        {sidebarLink("/snippets", "Snippets", Music)}
+        {/* {sidebarLink("/snippets", "Snippets", Music)} */}
         {sidebarLink("/search", "Search", Search)}
       </ul>
     </div>

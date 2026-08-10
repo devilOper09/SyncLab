@@ -10,6 +10,14 @@ const GoldBadge = () => (
   </svg>
 )
 
+const DefaultAvatar = ({ className = "w-full h-full" }) => (
+  <div className={`${className} bg-slate-800 flex items-center justify-center text-gray-500`}>
+    <svg className="w-3/5 h-3/5 fill-current" viewBox="0 0 24 24">
+      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+    </svg>
+  </div>
+)
+
 export default function StoriesSection() {
   const navigate = useNavigate()
   const currentUserId = localStorage.getItem("user_id")
@@ -20,15 +28,24 @@ export default function StoriesSection() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
+  const [currentUserProfile, setCurrentUserProfile] = useState(null)
 
   // Viewer Modal State
   const [activeUserIndex, setActiveUserIndex] = useState(null)
   const [activeStoryIndex, setActiveStoryIndex] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [replyText, setReplyText] = useState("")
 
   useEffect(() => {
     fetchStories()
+    if (currentUserId) {
+      api.get(`/profile/${currentUserId}`).then(res => {
+        if (res.data.success) {
+          setCurrentUserProfile(res.data.profile)
+        }
+      }).catch(console.error)
+    }
   }, [currentUserId])
 
   const fetchStories = async () => {
@@ -193,6 +210,28 @@ export default function StoriesSection() {
     }
   }
 
+  const handleSendReply = async (e) => {
+    e.preventDefault()
+    if (!replyText.trim() || !activeStory) return
+
+    const text = replyText.trim()
+    setReplyText("")
+    setIsPaused(false)
+
+    try {
+      const res = await api.post(`/social/stories/${activeStory.id}/reply`, {
+        sender_id: currentUserId,
+        message: text
+      })
+      if (res.data.success) {
+        toast.success("Reply sent!")
+      }
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to send reply.")
+    }
+  }
+
   const activeGroup = activeUserIndex !== null ? userStories[activeUserIndex] : null
   const activeStory = activeGroup ? activeGroup.stories[activeStoryIndex] : null
 
@@ -210,12 +249,16 @@ export default function StoriesSection() {
         {/* "+ Your Story" item */}
         <div className="flex flex-col items-center gap-1.5 shrink-0 snap-start cursor-pointer group" onClick={handleUploadClick}>
           <div className="relative w-16 h-16 rounded-full p-0.5 border-2 border-dashed border-indigo-500/60 group-hover:border-indigo-400 transition flex items-center justify-center bg-slate-900 shadow-md">
-            {currentUserAvatar ? (
+            {currentUserProfile?.profile_complete ? (
+              currentUserProfile.profile_picture ? (
+                <img src={currentUserProfile.profile_picture} alt="avatar" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                <DefaultAvatar className="w-full h-full rounded-full" />
+              )
+            ) : currentUserAvatar ? (
               <img src={currentUserAvatar} alt="avatar" className="w-full h-full rounded-full object-cover" />
             ) : (
-              <div className="w-full h-full rounded-full bg-indigo-950/50 flex items-center justify-center text-indigo-400 font-bold text-lg">
-                {currentUsername?.[0]?.toUpperCase()}
-              </div>
+              <DefaultAvatar className="w-full h-full rounded-full" />
             )}
             <div className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg border-2 border-slate-950">
               <Plus size={12} />
@@ -241,12 +284,16 @@ export default function StoriesSection() {
                   : "bg-linear-to-tr from-yellow-500 via-indigo-500 to-purple-600 animate-pulse"
               }`}>
                 <div className="w-full h-full rounded-full p-0.5 bg-slate-950 overflow-hidden">
-                  {group.avatar_url ? (
+                  {group.profile_complete ? (
+                    group.profile_picture ? (
+                      <img src={group.profile_picture} alt="avatar" className="w-full h-full rounded-full object-cover transition group-hover:scale-105" />
+                    ) : (
+                      <DefaultAvatar className="w-full h-full rounded-full transition group-hover:scale-105" />
+                    )
+                  ) : group.avatar_url ? (
                     <img src={group.avatar_url} alt="avatar" className="w-full h-full rounded-full object-cover transition group-hover:scale-105" />
                   ) : (
-                    <div className="w-full h-full rounded-full bg-indigo-950/50 flex items-center justify-center text-indigo-400 font-bold text-base">
-                      {group.display_name?.[0]?.toUpperCase() || group.username?.[0]?.toUpperCase()}
-                    </div>
+                    <DefaultAvatar className="w-full h-full rounded-full transition group-hover:scale-105" />
                   )}
                 </div>
               </div>
@@ -294,12 +341,16 @@ export default function StoriesSection() {
                   className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition"
                 >
                   <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 border border-white/20">
-                    {activeGroup.avatar_url ? (
+                    {activeGroup.profile_complete ? (
+                      activeGroup.profile_picture ? (
+                        <img src={activeGroup.profile_picture} alt="avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <DefaultAvatar className="w-full h-full" />
+                      )
+                    ) : activeGroup.avatar_url ? (
                       <img src={activeGroup.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs font-bold text-indigo-400">
-                        {activeGroup.username?.[0]?.toUpperCase()}
-                      </div>
+                      <DefaultAvatar className="w-full h-full" />
                     )}
                   </div>
                   <div>
@@ -349,6 +400,29 @@ export default function StoriesSection() {
                 />
               )}
             </div>
+
+            {/* Reply Input */}
+            {String(activeGroup.user_id) !== String(currentUserId) && (
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-linear-to-t from-black/90 via-black/60 to-transparent z-30">
+                <form onSubmit={handleSendReply} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Reply to story..."
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onFocus={() => setIsPaused(true)}
+                    onBlur={() => setIsPaused(false)}
+                    className="flex-1 bg-white/10 border border-white/10 rounded-full px-4 py-2 text-xs text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-full text-xs font-semibold transition"
+                  >
+                    Send
+                  </button>
+                </form>
+              </div>
+            )}
 
             {/* Left / Right Nav Touch Controls */}
             <div

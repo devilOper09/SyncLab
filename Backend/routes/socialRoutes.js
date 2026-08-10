@@ -14,6 +14,7 @@ import {
   sendCollabRequest,
   updateCollabStatus,
   cancelCollabRequest,
+  replyToStory,
 } from "../controllers/socialController.js";
 
 const router = express.Router();
@@ -35,6 +36,7 @@ router.get("/stories", getStories);
 router.post("/stories", createStory);
 router.post("/stories/:storyId/view", markStoryViewed);
 router.delete("/stories/:storyId", deleteStory);
+router.post("/stories/:storyId/reply", replyToStory);
 
 // Collab Requests
 router.get("/collabs", getCollabRequests);

@@ -10,7 +10,7 @@ import PublicHome from "./Pages/PublicHome"
 import Artists from "./Pages/Artists"
 import Search from "./Pages/Search"
 import Notifications from "./Pages/Notifications"
-import Snippets from "./Pages/Snippets"
+// import Snippets from "./Pages/Snippets"
 import YourProfile from "./Pages/YourProfile"
 import SetUpProfile from "./Pages/setUpProfile"
 import Messages from "./Pages/Messages"
@@ -142,7 +142,7 @@ function App() {
         <Route path="/artist" element={<Artists />} />
         <Route path="/search" element={<Search />} />
         <Route path="/notification" element={<Notifications />} />
-        <Route path="/snippets" element={<Snippets />} />
+        {/* <Route path="/snippets" element={<Snippets />} /> */}
         <Route path="/profile" element={<YourProfile />} />
         <Route path="/user/:username" element={<YourProfile />} />
         <Route path="/message" element={<Messages />} />

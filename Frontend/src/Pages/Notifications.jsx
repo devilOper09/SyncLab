@@ -117,6 +117,7 @@ function Notifications() {
                              n.type === 'collab_request' ? "sent you a collaboration request." :
                              n.type === 'collab_accepted' ? "accepted your collaboration request." :
                              n.type === 'collab_declined' ? "declined your collaboration request." :
+                             n.type === 'story_reply' ? "replied to your story." :
                              "sent you a message."}
                           </span>
                         </p>

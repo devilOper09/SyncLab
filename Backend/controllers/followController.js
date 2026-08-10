@@ -145,13 +145,15 @@ export const getFollowCounts = async (req, res) => {
   }
 };
 
-// GET /follow/followers/:userId  — list of users who follow userId
+// GET /follow/followers/:userId  — list of users following userId
 export const getFollowers = async (req, res) => {
   const userId = parseInt(req.params.userId, 10);
   const currentUserId = parseInt(req.query.user_id, 10) || null;
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.username, u.display_name, u.avatar_url, u.role, u.is_founder,
+      `SELECT u.id, u.username, u.display_name,
+              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              u.role, u.is_founder,
               CASE WHEN $2::int IS NOT NULL THEN
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = u.id)
               ELSE false END AS is_following
@@ -174,7 +176,9 @@ export const getFollowing = async (req, res) => {
   const currentUserId = parseInt(req.query.user_id, 10) || null;
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.username, u.display_name, u.avatar_url, u.role, u.is_founder,
+      `SELECT u.id, u.username, u.display_name,
+              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              u.role, u.is_founder,
               CASE WHEN $2::int IS NOT NULL THEN
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = u.id)
               ELSE false END AS is_following
@@ -203,7 +207,7 @@ export const searchUsers = async (req, res) => {
          u.id,
          u.username,
          u.display_name,
-         u.avatar_url,
+         CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
          u.role,
          u.bio,
          u.is_founder,

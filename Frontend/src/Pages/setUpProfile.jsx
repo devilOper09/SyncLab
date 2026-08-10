@@ -32,6 +32,7 @@ function SetUpProfile() {
   const [postType,     setPostType]     = useState("beat")
   const [postAudioUrl, setPostAudioUrl] = useState("")
   const [postCoverUrl, setPostCoverUrl] = useState("")
+  const [postVisibility, setPostVisibility] = useState("public")
   const [uploadingFile, setUploadingFile] = useState(false)
 
   // Cropper state
@@ -130,6 +131,7 @@ function SetUpProfile() {
         post_type: postType,
         audio_url: postAudioUrl,
         cover_url: postCoverUrl || null,
+        visibility: postVisibility,
       })
       toast.success("First post uploaded! Welcome to SyncLab 🎵")
       navigate("/home")
@@ -337,6 +339,27 @@ function SetUpProfile() {
                       onClick={() => setPostType(val)}
                       className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all duration-200
                         ${postType === val
+                          ? "bg-indigo-600 border-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.3)]"
+                          : "border-white/10 text-gray-500 hover:border-indigo-500/40 hover:text-indigo-300"
+                        }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Visibility */}
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block">Visibility</label>
+                <div className="flex gap-2">
+                  {[["public", "Public"], ["private", "Private"]].map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setPostVisibility(val)}
+                      className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all duration-200
+                        ${postVisibility === val
                           ? "bg-indigo-600 border-indigo-500 text-white shadow-[0_0_12px_rgba(99,102,241,0.3)]"
                           : "border-white/10 text-gray-500 hover:border-indigo-500/40 hover:text-indigo-300"
                         }`}

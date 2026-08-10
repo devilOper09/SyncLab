@@ -70,6 +70,16 @@ const ensureFounderFlag = async () => {
     "UPDATE SyncLabUsers SET is_founder = (LOWER(email) = $1)",
     [FOUNDER_EMAIL]
   )
+
+  await pool.query(`
+    ALTER TABLE IF EXISTS SyncLabUsers
+    ADD COLUMN IF NOT EXISTS profile_picture TEXT
+  `)
+
+  await pool.query(`
+    ALTER TABLE IF EXISTS MusicPosts
+    ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'public'
+  `)
 }
 
 app.post("/api/upload", upload.single("file"), (req, res) => {
@@ -89,10 +99,13 @@ app.use("/social", socialRoutes);
 app.get("/api/posts", async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT p.id AS "_id", p.user_id, p.caption, p.genre, p.post_type, p.audio_url, p.cover_url, p.created_at,
-             u.username AS "userName", u.display_name, u.avatar_url, u.is_founder
+      SELECT p.id AS "_id", p.user_id, p.caption, p.genre, p.post_type, p.audio_url, p.cover_url, p.created_at, p.visibility,
+             u.username AS "userName", u.display_name,
+             CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+             u.is_founder
       FROM MusicPosts p
       JOIN SyncLabUsers u ON p.user_id = u.id
+      WHERE p.visibility IS NULL OR p.visibility != 'private'
       ORDER BY p.created_at DESC
     `);
     res.json(result.rows);

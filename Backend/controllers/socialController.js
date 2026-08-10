@@ -109,7 +109,7 @@ export const getNotifications = async (req, res) => {
          n.created_at,
          u.username,
          u.display_name,
-         u.avatar_url,
+         CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
          u.is_founder
        FROM notifications n
        JOIN SyncLabUsers u ON u.id = n.actor_id
@@ -213,7 +213,7 @@ export const getConversations = async (req, res) => {
          u.id AS user_id,
          u.username,
          u.display_name,
-         u.avatar_url,
+         CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
          u.is_founder,
          m.message AS last_message,
          m.created_at AS last_message_time,
@@ -321,7 +321,7 @@ export const getStories = async (req, res) => {
     // Only return stories created in the last 24 hours
     const { rows } = await pool.query(
       `SELECT s.id, s.user_id, s.media_url, s.media_type, s.created_at,
-              u.username, u.display_name, u.avatar_url, u.is_founder,
+              u.username, u.display_name, u.avatar_url, u.profile_picture, u.profile_complete, u.is_founder,
               EXISTS(SELECT 1 FROM story_views WHERE story_id = s.id AND user_id = $1) AS is_viewed
        FROM stories s
        JOIN SyncLabUsers u ON u.id = s.user_id
@@ -339,6 +339,8 @@ export const getStories = async (req, res) => {
           username: story.username,
           display_name: story.display_name,
           avatar_url: story.avatar_url,
+          profile_picture: story.profile_picture,
+          profile_complete: story.profile_complete,
           is_founder: story.is_founder,
           stories: [],
           all_viewed: true
@@ -447,7 +449,9 @@ export const getCollabRequests = async (req, res) => {
     // Incoming requests
     const incomingRes = await pool.query(
       `SELECT c.id, c.sender_id, c.receiver_id, c.beat_name, c.message, c.role, c.status, c.created_at,
-              u.username, u.display_name, u.avatar_url, u.is_founder
+              u.username, u.display_name,
+              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              u.is_founder
        FROM collab_requests c
        JOIN SyncLabUsers u ON u.id = c.sender_id
        WHERE c.receiver_id = $1
@@ -458,7 +462,9 @@ export const getCollabRequests = async (req, res) => {
     // Outgoing requests
     const outgoingRes = await pool.query(
       `SELECT c.id, c.sender_id, c.receiver_id, c.beat_name, c.message, c.role, c.status, c.created_at,
-              u.username, u.display_name, u.avatar_url, u.is_founder
+              u.username, u.display_name,
+              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              u.is_founder
        FROM collab_requests c
        JOIN SyncLabUsers u ON u.id = c.receiver_id
        WHERE c.sender_id = $1
@@ -603,5 +609,71 @@ export const cancelCollabRequest = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to cancel collab request." });
+  }
+};
+
+// POST /social/stories/:storyId/reply
+// Body: { sender_id, message }
+export const replyToStory = async (req, res) => {
+  const storyId = parseInt(req.params.storyId, 10);
+  const senderId = parseInt(req.body.sender_id, 10);
+  const { message } = req.body;
+
+  if (!storyId || !senderId || !message || !message.trim()) {
+    return res.status(400).json({ success: false, message: "Missing parameters." });
+  }
+
+  try {
+    // 1. Find the story owner
+    const storyRes = await pool.query("SELECT user_id FROM stories WHERE id = $1", [storyId]);
+    if (storyRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Story not found." });
+    }
+    const targetId = storyRes.rows[0].user_id;
+
+    if (senderId === targetId) {
+      return res.status(400).json({ success: false, message: "Cannot reply to your own story." });
+    }
+
+    // 2. Get or create conversation
+    let conversationId;
+    const existing = await pool.query(
+      `SELECT cm1.conversation_id
+       FROM conversation_members cm1
+       JOIN conversation_members cm2 ON cm1.conversation_id = cm2.conversation_id
+       WHERE cm1.user_id = $1 AND cm2.user_id = $2`,
+      [senderId, targetId]
+    );
+
+    if (existing.rows.length > 0) {
+      conversationId = existing.rows[0].conversation_id;
+    } else {
+      const newConv = await pool.query(`INSERT INTO conversations DEFAULT VALUES RETURNING id`);
+      conversationId = newConv.rows[0].id;
+      await pool.query(
+        `INSERT INTO conversation_members (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
+        [conversationId, senderId, targetId]
+      );
+    }
+
+    // 3. Insert message
+    const msgResult = await pool.query(
+      `INSERT INTO messages (conversation_id, sender_id, message)
+       VALUES ($1, $2, $3)
+       RETURNING id, conversation_id, sender_id, message, created_at, is_read`,
+      [conversationId, senderId, message.trim()]
+    );
+
+    // 4. Create notification for story owner
+    await pool.query(
+      `INSERT INTO notifications (recipient_id, actor_id, type, reference_id)
+       VALUES ($1, $2, 'story_reply', $3)`,
+      [targetId, senderId, storyId]
+    );
+
+    res.json({ success: true, conversationId, message: msgResult.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Failed to reply to story." });
   }
 };

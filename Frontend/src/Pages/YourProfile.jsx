@@ -172,6 +172,7 @@ function YourProfile() {
   const [postType, setPostType] = useState("beat")
   const [postAudioUrl, setPostAudioUrl] = useState("")
   const [postCoverUrl, setPostCoverUrl] = useState("")
+  const [postVisibility, setPostVisibility] = useState("public")
   const [submittingPost, setSubmittingPost] = useState(false)
 
   // Edit profile state
@@ -466,7 +467,9 @@ function YourProfile() {
 
   const fetchPosts = async () => {
     try {
-      const res = await api.get(`/profile/${user_id}/posts`)
+      const res = await api.get(`/profile/${user_id}/posts`, {
+        params: { viewer_id: loggedInUserId }
+      })
       setPosts(res.data.posts)
     } catch {
       // silently fail — posts section just stays empty
@@ -585,10 +588,11 @@ function YourProfile() {
         post_type: postType,
         audio_url: postAudioUrl,
         cover_url: postCoverUrl || null,
+        visibility: postVisibility,
       })
       toast.success("Post uploaded!")
       setShowPostForm(false)
-      setPostCaption(""); setPostGenre(""); setPostAudioUrl(""); setPostCoverUrl("")
+      setPostCaption(""); setPostGenre(""); setPostAudioUrl(""); setPostCoverUrl(""); setPostVisibility("public")
       fetchPosts()
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to post.")
@@ -881,9 +885,16 @@ function YourProfile() {
                         <div className="flex-1 p-4 flex flex-col gap-2 z-10 relative min-w-0">
                           {/* Track meta */}
                           <div className="flex items-center justify-between pr-10">
-                            <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">
-                              {POST_TYPE_LABELS[post.post_type] || post.post_type}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">
+                                {POST_TYPE_LABELS[post.post_type] || post.post_type}
+                              </span>
+                              {post.visibility === 'private' && (
+                                <span className="text-[9px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                  Private
+                                </span>
+                              )}
+                            </div>
                             <span className="text-xs text-gray-400 bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5">
                               {post.genre || "General"}
                             </span>
@@ -963,6 +974,11 @@ function YourProfile() {
                             <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wide leading-none">
                               {POST_TYPE_LABELS[post.post_type] || post.post_type}
                             </span>
+                            {post.visibility === 'private' && (
+                              <span className="text-[9px] font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-1 rounded uppercase tracking-wider leading-none">
+                                Private
+                              </span>
+                            )}
                             {post.genre && (
                               <span className="text-[10px] text-gray-600 leading-none">· {post.genre}</span>
                             )}
@@ -1070,6 +1086,27 @@ function YourProfile() {
                       onClick={() => setPostType(val)}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200
                         ${postType === val
+                          ? "bg-indigo-600 border-indigo-500 text-white"
+                          : "border-white/10 text-gray-500 hover:border-indigo-500/40 hover:text-indigo-300"
+                        }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Visibility */}
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block">Visibility</label>
+                <div className="flex gap-2">
+                  {[["public", "Public"], ["private", "Private"]].map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setPostVisibility(val)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200
+                        ${postVisibility === val
                           ? "bg-indigo-600 border-indigo-500 text-white"
                           : "border-white/10 text-gray-500 hover:border-indigo-500/40 hover:text-indigo-300"
                         }`}
