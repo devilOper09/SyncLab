@@ -115,19 +115,26 @@ function Home() {
   const [expandedPostId, setExpandedPostId] = useState(null);
 
   const handlePlayPause = (post) => {
-    setExpandedPostId(post._id || post.id);
+    const postId = post._id || post.id;
+    setExpandedPostId(postId);
     playTrack({
-      id: post._id || post.id,
+      id: postId,
       caption: post.caption,
       audio_url: post.audio_url,
       cover_url: post.cover_url,
       artistName: post.userName
     });
+    // Track view once per session
+    if (!viewedPosts.current.has(postId)) {
+      viewedPosts.current.add(postId);
+      axios.post(`http://localhost:3000/api/posts/${postId}/view`).catch(() => {});
+    }
   };
 
   const fetchPosts = async () => {
     try {
-      const res = await axios.get("http://localhost:3000/api/posts");
+      const params = loggedInUserId ? { user_id: loggedInUserId } : {};
+      const res = await axios.get("http://localhost:3000/api/posts", { params });
       return res.data;
     } catch (err) {
       console.error("Failed to fetch posts:", err);
@@ -165,6 +172,12 @@ function Home() {
       setPosts(data);
       setHasMore(false);
       setLoading(false);
+      // Initialize liked state from backend
+      const likedMap = {};
+      data.forEach(p => {
+        if (p.liked_by_me) likedMap[p._id || p.id] = true;
+      });
+      setLikedPosts(likedMap);
     });
     void fetchUsers();
   }, []);
@@ -226,9 +239,29 @@ function Home() {
     }
   };
 
-  const toggleLike = (postId) => {
-    setLikedPosts(prev => ({ ...prev, [postId]: !prev[postId] }));
-    toast.success(likedPosts[postId] ? "Unliked" : "Liked!");
+  const toggleLike = async (postId) => {
+    if (!loggedInUserId) {
+      toast.error("Please log in first.");
+      return;
+    }
+    // Optimistic update
+    const wasLiked = likedPosts[postId];
+    setLikedPosts(prev => ({ ...prev, [postId]: !wasLiked }));
+    try {
+      const res = await axios.post(`http://localhost:3000/api/posts/${postId}/like`, {
+        user_id: loggedInUserId
+      });
+      const { liked, likes_count } = res.data;
+      setLikedPosts(prev => ({ ...prev, [postId]: liked }));
+      setPosts(prev => prev.map(p =>
+        (p._id || p.id) === postId ? { ...p, likes_count } : p
+      ));
+      toast.success(liked ? "Liked!" : "Unliked");
+    } catch (err) {
+      // Revert optimistic update
+      setLikedPosts(prev => ({ ...prev, [postId]: wasLiked }));
+      toast.error("Failed to update like.");
+    }
   };
 
   const toggleSave = (postId) => {
@@ -241,14 +274,18 @@ function Home() {
     toast.success(repostedPosts[postId] ? "Repost removed" : "Reposted!");
   };
 
+  const viewedPosts = useRef(new Set());
+
   // Filter posts by genre
   const filteredPosts = posts.filter(post => {
     if (selectedGenre === "All") return true;
     return post.genre?.toLowerCase() === selectedGenre.toLowerCase();
   });
 
-  // Trending Beats: post_type === 'beat' or has audio_url
-  const trendingBeats = posts.filter(post => post.audio_url && (post.post_type === 'beat' || !post.post_type));
+  // Trending Beats: post_type === 'beat' or has audio_url, sorted by engagement
+  const trendingBeats = posts
+    .filter(post => post.audio_url && (post.post_type === 'beat' || !post.post_type))
+    .sort((a, b) => ((b.likes_count || 0) * 2 + (b.views_count || 0)) - ((a.likes_count || 0) * 2 + (a.views_count || 0)));
 
   // New Snippets: post_type === 'beat_snippet' or 'song_snippet'
   const newSnippets = posts.filter(post => post.audio_url && (post.post_type === 'beat_snippet' || post.post_type === 'song_snippet'));
@@ -294,13 +331,7 @@ function Home() {
                   )}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                     <button 
-                      onClick={() => playTrack({
-                        id: featuredBeat._id || featuredBeat.id,
-                        caption: featuredBeat.caption,
-                        audio_url: featuredBeat.audio_url,
-                        cover_url: featuredBeat.cover_url,
-                        artistName: featuredBeat.userName
-                      })}
+                      onClick={() => handlePlayPause(featuredBeat)}
                       className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-500 hover:scale-105 transition-all duration-300 shadow-lg shadow-indigo-600/30"
                     >
                       {activeTrack?.id === (featuredBeat._id || featuredBeat.id) && isPlaying ? (
@@ -327,13 +358,7 @@ function Home() {
                   </p>
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-1">
                     <button 
-                      onClick={() => playTrack({
-                        id: featuredBeat._id || featuredBeat.id,
-                        caption: featuredBeat.caption,
-                        audio_url: featuredBeat.audio_url,
-                        cover_url: featuredBeat.cover_url,
-                        artistName: featuredBeat.userName
-                      })}
+                      onClick={() => handlePlayPause(featuredBeat)}
                       className="px-6 py-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold flex items-center gap-2 hover:scale-105 transition-all duration-300 shadow-lg shadow-indigo-600/20"
                     >
                       {activeTrack?.id === (featuredBeat._id || featuredBeat.id) && isPlaying ? (
@@ -419,13 +444,7 @@ function Home() {
                           {/* Play Button Overlay */}
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                             <button 
-                              onClick={() => playTrack({
-                                id: beat._id || beat.id,
-                                caption: beat.caption,
-                                audio_url: beat.audio_url,
-                                cover_url: beat.cover_url,
-                                artistName: beat.userName
-                              })}
+                              onClick={() => handlePlayPause(beat)}
                               className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-500 hover:scale-105 transition-all duration-300 shadow-lg"
                             >
                               {isCurrent && isPlaying ? (
@@ -494,13 +513,7 @@ function Home() {
                           {/* Play Button Overlay */}
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                             <button 
-                              onClick={() => playTrack({
-                                id: snippet._id || snippet.id,
-                                caption: snippet.caption,
-                                audio_url: snippet.audio_url,
-                                cover_url: snippet.cover_url,
-                                artistName: snippet.userName
-                              })}
+                              onClick={() => handlePlayPause(snippet)}
                               className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-500 hover:scale-105 transition-all duration-300 shadow-lg"
                             >
                               {isCurrent && isPlaying ? (
@@ -838,7 +851,7 @@ function Home() {
                             className={`flex items-center gap-1 hover:text-red-500 transition-colors ${likedPosts[post._id || post.id] ? "text-red-500" : ""}`}
                           >
                             <Heart size={14} className={likedPosts[post._id || post.id] ? "fill-current" : ""} />
-                            <span>{likedPosts[post._id || post.id] ? 1 : 0}</span>
+                            <span>{(post.likes_count || 0)}</span>
                           </button>
                           <button 
                             onClick={() => toast.success("Comments section coming soon!")}

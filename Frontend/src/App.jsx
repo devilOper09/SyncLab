@@ -15,6 +15,7 @@ import YourProfile from "./Pages/YourProfile"
 import SetUpProfile from "./Pages/setUpProfile"
 import Messages from "./Pages/Messages"
 import CollabRequests from "./Pages/Collabs"
+import Trending from "./Pages/Trending"
 
 // Handles the redirect from Google OAuth — reads query params, stores in localStorage, redirects
 function GoogleAuthCallback() {
@@ -139,7 +140,7 @@ function App() {
         <Route path="/home" element={<Home />}/>
         <Route path="/setup-profile" element={<SetUpProfile />}/>
         <Route path="/auth/callback" element={<GoogleAuthCallback />} />
-        <Route path="/artist" element={<Artists />} />
+        <Route path="/artists" element={<Artists />} />
         <Route path="/search" element={<Search />} />
         <Route path="/notification" element={<Notifications />} />
         {/* <Route path="/snippets" element={<Snippets />} /> */}
@@ -147,6 +148,7 @@ function App() {
         <Route path="/user/:username" element={<YourProfile />} />
         <Route path="/message" element={<Messages />} />
         <Route path="/collabs" element={<CollabRequests />} />
+        <Route path="/trending" element={<Trending />} />
       </Routes>
 
       <MiniPlayer />
