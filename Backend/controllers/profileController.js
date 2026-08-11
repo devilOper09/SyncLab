@@ -118,7 +118,7 @@ export const getProfile = async (req, res) => {
 
     const result = await pool.query(
       `SELECT id, email, display_name, username, role, bio, genres,
-              CASE WHEN profile_complete = true THEN profile_picture ELSE avatar_url END AS avatar_url,
+              COALESCE(profile_picture, avatar_url) AS avatar_url,
               avatar, cover_url, profile_complete, is_founder,
               followers_count, following_count, profile_picture
        FROM SyncLabUsers WHERE id = $1`,

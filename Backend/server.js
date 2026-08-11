@@ -101,7 +101,7 @@ app.get("/api/posts", async (req, res) => {
     const result = await pool.query(`
       SELECT p.id AS "_id", p.user_id, p.caption, p.genre, p.post_type, p.audio_url, p.cover_url, p.created_at, p.visibility,
              u.username AS "userName", u.display_name,
-             CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+             COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
              u.is_founder
       FROM MusicPosts p
       JOIN SyncLabUsers u ON p.user_id = u.id

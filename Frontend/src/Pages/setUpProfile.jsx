@@ -105,6 +105,8 @@ function SetUpProfile() {
       if (res.data.success) {
         localStorage.setItem("profile_complete", "true")
         localStorage.setItem("username", username)
+        if (avatarUrl) localStorage.setItem("avatar", avatarUrl)
+        if (displayName.trim()) localStorage.setItem("display_name", displayName.trim())
         toast.success("Profile saved!")
         setStep(3)
       }

@@ -21,6 +21,8 @@ function Login() {
         localStorage.setItem("user_id", res.data.user_id)
         localStorage.setItem("profile_complete", res.data.profile_complete ? "true" : "false")
         localStorage.setItem("is_founder", res.data.is_founder ? "true" : "false")
+        if (res.data.display_name) localStorage.setItem("display_name", res.data.display_name)
+        if (res.data.avatar_url) localStorage.setItem("avatar", res.data.avatar_url)
         toast.success("Welcome back!")
         if (!res.data.profile_complete) {
           navigate("/setup-profile")

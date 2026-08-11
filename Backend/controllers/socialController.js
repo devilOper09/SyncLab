@@ -109,7 +109,7 @@ export const getNotifications = async (req, res) => {
          n.created_at,
          u.username,
          u.display_name,
-         CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+         COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
          u.is_founder
        FROM notifications n
        JOIN SyncLabUsers u ON u.id = n.actor_id
@@ -213,7 +213,7 @@ export const getConversations = async (req, res) => {
          u.id AS user_id,
          u.username,
          u.display_name,
-         CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+         COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
          u.is_founder,
          m.message AS last_message,
          m.created_at AS last_message_time,
@@ -450,7 +450,7 @@ export const getCollabRequests = async (req, res) => {
     const incomingRes = await pool.query(
       `SELECT c.id, c.sender_id, c.receiver_id, c.beat_name, c.message, c.role, c.status, c.created_at,
               u.username, u.display_name,
-              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
               u.is_founder
        FROM collab_requests c
        JOIN SyncLabUsers u ON u.id = c.sender_id
@@ -463,7 +463,7 @@ export const getCollabRequests = async (req, res) => {
     const outgoingRes = await pool.query(
       `SELECT c.id, c.sender_id, c.receiver_id, c.beat_name, c.message, c.role, c.status, c.created_at,
               u.username, u.display_name,
-              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
               u.is_founder
        FROM collab_requests c
        JOIN SyncLabUsers u ON u.id = c.receiver_id

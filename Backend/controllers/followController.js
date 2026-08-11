@@ -152,7 +152,7 @@ export const getFollowers = async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.username, u.display_name,
-              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
               u.role, u.is_founder,
               CASE WHEN $2::int IS NOT NULL THEN
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = u.id)
@@ -177,7 +177,7 @@ export const getFollowing = async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.username, u.display_name,
-              CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+              COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
               u.role, u.is_founder,
               CASE WHEN $2::int IS NOT NULL THEN
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = u.id)
@@ -207,7 +207,7 @@ export const searchUsers = async (req, res) => {
          u.id,
          u.username,
          u.display_name,
-         CASE WHEN u.profile_complete = true THEN u.profile_picture ELSE u.avatar_url END AS avatar_url,
+         COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
          u.role,
          u.bio,
          u.is_founder,

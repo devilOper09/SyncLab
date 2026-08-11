@@ -163,27 +163,11 @@ function Home() {
     setLoading(true);
     fetchPosts().then(data => {
       setPosts(data);
+      setHasMore(false);
       setLoading(false);
     });
     void fetchUsers();
   }, []);
-
-  // Infinite scroll simulation
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 100) {
-        if (!loading && hasMore) {
-          setLoading(true);
-          setTimeout(() => {
-            setPosts(prev => [...prev, ...prev.slice(0, 4)]); // duplicate posts to simulate infinite scroll
-            setLoading(false);
-          }, 1000);
-        }
-      }
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [loading, hasMore]);
 
   const handlePost = async () => {
     if (!caption.trim()) return;
@@ -748,8 +732,12 @@ function Home() {
                             }}
                             className="flex items-center gap-2.5 min-w-0 cursor-pointer group/user"
                           >
-                            <div className="w-8 h-8 rounded-full bg-indigo-950/50 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0 group-hover/user:border-indigo-400 transition">
-                              {post.userName.substring(0, 2).toUpperCase()}
+                            <div className="w-8 h-8 rounded-full bg-indigo-950/50 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold text-xs shrink-0 group-hover/user:border-indigo-400 transition overflow-hidden">
+                              {post.avatar_url ? (
+                                <img src={post.avatar_url} alt={post.userName} className="w-full h-full object-cover" />
+                              ) : (
+                                post.userName.substring(0, 2).toUpperCase()
+                              )}
                             </div>
                             <div className="min-w-0">
                               <h4 className="font-bold text-white text-xs flex items-center gap-1 truncate group-hover/user:text-indigo-400 transition">

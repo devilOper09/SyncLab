@@ -73,7 +73,7 @@ export const login = async(req, res)=>{
     )
 
     const updatedUser = updated.rows[0]
-    res.json({ message: "Login Successful", success: true, user_id: updatedUser.id, profile_complete: updatedUser.profile_complete, is_founder: updatedUser.is_founder })
+    res.json({ message: "Login Successful", success: true, user_id: updatedUser.id, profile_complete: updatedUser.profile_complete, is_founder: updatedUser.is_founder, display_name: user.display_name, avatar_url: user.profile_picture || user.avatar_url || user.avatar })
 
 }catch(error){
     console.log(error)
