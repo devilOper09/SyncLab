@@ -24,7 +24,7 @@ passport.deserializeUser((user, done) => {
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "http://localhost:3000/auth/google/callback"
+  callbackURL: (process.env.BACKEND_URL || "http://localhost:3000") + "/auth/google/callback"
 },
 async (accessToken, refreshToken, profile, cb) => {
   try {
@@ -77,14 +77,15 @@ async (accessToken, refreshToken, profile, cb) => {
 
 router.get("/google", arcjetMiddleware([authRateLimitRule]), passport.authenticate("google", { scope: ["profile", "email"], prompt: "select_account" }))
 
-router.get("/google/callback", arcjetMiddleware([authRateLimitRule]), passport.authenticate("google", { failureRedirect: "http://localhost:5173/login" }),
+router.get("/google/callback", arcjetMiddleware([authRateLimitRule]), passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL || "http://localhost:5173"}/login` }),
   (req, res) => {
     const user = req.user
     const profileComplete = user.profile_complete ? "true" : "false"
     const founder = user.is_founder ? "true" : "false"
     // Pass user data to frontend via query params so React can store in localStorage
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173"
     res.redirect(
-      `http://localhost:5173/auth/callback?user_id=${user.id}&profile_complete=${profileComplete}&is_founder=${founder}&name=${encodeURIComponent(user.name || "")}&email=${encodeURIComponent(user.email || "")}&avatar=${encodeURIComponent(user.avatar || "")}`
+      `${frontendUrl}/auth/callback?user_id=${user.id}&profile_complete=${profileComplete}&is_founder=${founder}&name=${encodeURIComponent(user.name || "")}&email=${encodeURIComponent(user.email || "")}&avatar=${encodeURIComponent(user.avatar || "")}`
     )
   }
 )

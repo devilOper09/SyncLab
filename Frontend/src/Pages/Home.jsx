@@ -127,14 +127,14 @@ function Home() {
     // Track view once per session
     if (!viewedPosts.current.has(postId)) {
       viewedPosts.current.add(postId);
-      axios.post(`http://localhost:3000/api/posts/${postId}/view`).catch(() => {});
+      api.post(`/api/posts/${postId}/view`).catch(() => {});
     }
   };
 
   const fetchPosts = async () => {
     try {
       const params = loggedInUserId ? { user_id: loggedInUserId } : {};
-      const res = await axios.get("http://localhost:3000/api/posts", { params });
+      const res = await api.get("/api/posts", { params });
       return res.data;
     } catch (err) {
       console.error("Failed to fetch posts:", err);
@@ -185,7 +185,7 @@ function Home() {
   const handlePost = async () => {
     if (!caption.trim()) return;
     try {
-      await axios.post("http://localhost:3000/api/posts", {
+      await api.post("/api/posts", {
         userName: loggedInUsername,
         caption,
       });
@@ -248,7 +248,7 @@ function Home() {
     const wasLiked = likedPosts[postId];
     setLikedPosts(prev => ({ ...prev, [postId]: !wasLiked }));
     try {
-      const res = await axios.post(`http://localhost:3000/api/posts/${postId}/like`, {
+      const res = await api.post(`/api/posts/${postId}/like`, {
         user_id: loggedInUserId
       });
       const { liked, likes_count } = res.data;

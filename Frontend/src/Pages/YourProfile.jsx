@@ -596,17 +596,19 @@ function YourProfile() {
       formData.append("caption", postCaption)
       formData.append("genre", postGenre)
       formData.append("post_type", postType)
-      formData.append("cover_url", postCoverUrl || "")
       formData.append("visibility", postVisibility)
       if (postAudioFile) {
         formData.append("audio", postAudioFile)
+      }
+      if (postCoverFile) {
+        formData.append("cover", postCoverFile)
       }
       await api.post("/profile/post", formData, {
         headers: { "Content-Type": "multipart/form-data" }
       })
       toast.success("Post uploaded!")
       setShowPostForm(false)
-      setPostCaption(""); setPostGenre(""); setPostAudioFile(null); setPostCoverUrl(""); setPostVisibility("public")
+      setPostCaption(""); setPostGenre(""); setPostAudioFile(null); setPostCoverFile(null); setPostCoverUrl(""); setPostVisibility("public")
       fetchPosts()
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to post.")

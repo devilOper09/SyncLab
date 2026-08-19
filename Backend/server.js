@@ -49,6 +49,8 @@ app.use(
           "http://localhost:3000",
           "http://localhost:5173",
           "http://localhost:5174",
+          "https://synclab-x9qu.onrender.com",
+          "https://*.vercel.app",
           "https://accounts.google.com",
         ],
         frameSrc: ["'self'", "https://accounts.google.com"],

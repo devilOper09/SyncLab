@@ -103,14 +103,14 @@ function Trending() {
     // Track view once per session
     if (!viewedPosts.current.has(postId)) {
       viewedPosts.current.add(postId);
-      axios.post(`http://localhost:3000/api/posts/${postId}/view`).catch(() => {});
+      api.post(`/api/posts/${postId}/view`).catch(() => {});
     }
   };
 
   const fetchTrendingPosts = async () => {
     try {
       const params = loggedInUserId ? { user_id: loggedInUserId } : {};
-      const res = await axios.get("http://localhost:3000/api/posts/trending", { params });
+      const res = await api.get("/api/posts/trending", { params });
       return res.data;
     } catch (err) {
       console.error("Failed to fetch trending posts:", err);
@@ -140,7 +140,7 @@ function Trending() {
     const wasLiked = likedPosts[postId];
     setLikedPosts(prev => ({ ...prev, [postId]: !wasLiked }));
     try {
-      const res = await axios.post(`http://localhost:3000/api/posts/${postId}/like`, {
+      const res = await api.post(`/api/posts/${postId}/like`, {
         user_id: loggedInUserId
       });
       const { liked, likes_count } = res.data;
