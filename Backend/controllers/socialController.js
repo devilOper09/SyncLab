@@ -1,4 +1,5 @@
 import pool from "../db.js";
+import { validateId, validateString } from "../utils/validation.js";
 
 // Ensure social tables exist
 export const ensureSocialTables = async () => {
@@ -92,12 +93,8 @@ export const ensureSocialTables = async () => {
 
 // GET /social/notifications?user_id=X
 export const getNotifications = async (req, res) => {
-  const userId = parseInt(req.query.user_id, 10);
-  if (!userId) {
-    return res.status(400).json({ success: false, message: "Missing user_id." });
-  }
-
   try {
+    const userId = validateId(req.query.user_id, "User ID");
     const { rows } = await pool.query(
       `SELECT
          n.id,
@@ -119,6 +116,9 @@ export const getNotifications = async (req, res) => {
     );
     res.json({ success: true, notifications: rows });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to fetch notifications." });
   }
@@ -127,27 +127,39 @@ export const getNotifications = async (req, res) => {
 // PUT /social/notifications/read
 // Body: { user_id, notification_id } (if notification_id is omitted, mark all as read)
 export const markNotificationsRead = async (req, res) => {
-  const userId = parseInt(req.body.user_id, 10);
-  const notificationId = req.body.notification_id ? parseInt(req.body.notification_id, 10) : null;
-
-  if (!userId) {
-    return res.status(400).json({ success: false, message: "Missing user_id." });
-  }
-
   try {
+    const userId = validateId(req.body.user_id, "User ID");
+    const notificationId = req.body.notification_id
+      ? validateId(req.body.notification_id, "Notification ID")
+      : null;
+
     if (notificationId) {
+      // Verify the notification belongs to this user before updating
+      const check = await pool.query(
+        "SELECT recipient_id FROM notifications WHERE id = $1",
+        [notificationId]
+      );
+      if (check.rows.length === 0) {
+        return res.status(404).json({ success: false, message: "Notification not found." });
+      }
+      if (check.rows[0].recipient_id !== userId) {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+      }
       await pool.query(
-        `UPDATE notifications SET is_read = true WHERE id = $1 AND recipient_id = $2`,
-        [notificationId, userId]
+        "UPDATE notifications SET is_read = true WHERE id = $1",
+        [notificationId]
       );
     } else {
       await pool.query(
-        `UPDATE notifications SET is_read = true WHERE recipient_id = $1`,
+        "UPDATE notifications SET is_read = true WHERE recipient_id = $1",
         [userId]
       );
     }
     res.json({ success: true });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to mark notifications as read." });
   }
@@ -156,17 +168,14 @@ export const markNotificationsRead = async (req, res) => {
 // POST /social/conversations
 // Body: { user_id, target_id }
 export const getOrCreateConversation = async (req, res) => {
-  const userId = parseInt(req.body.user_id, 10);
-  const targetId = parseInt(req.body.target_id, 10);
-
-  if (!userId || !targetId) {
-    return res.status(400).json({ success: false, message: "Missing user IDs." });
-  }
-  if (userId === targetId) {
-    return res.status(400).json({ success: false, message: "Cannot message yourself." });
-  }
-
   try {
+    const userId = validateId(req.body.user_id, "User ID");
+    const targetId = validateId(req.body.target_id, "Target ID");
+
+    if (userId === targetId) {
+      return res.status(400).json({ success: false, message: "Cannot message yourself." });
+    }
+
     // Check if conversation already exists between these two users
     const existing = await pool.query(
       `SELECT cm1.conversation_id
@@ -182,18 +191,21 @@ export const getOrCreateConversation = async (req, res) => {
 
     // Create new conversation
     const newConv = await pool.query(
-      `INSERT INTO conversations DEFAULT VALUES RETURNING id`
+      "INSERT INTO conversations DEFAULT VALUES RETURNING id"
     );
     const conversationId = newConv.rows[0].id;
 
     // Add members
     await pool.query(
-      `INSERT INTO conversation_members (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
+      "INSERT INTO conversation_members (conversation_id, user_id) VALUES ($1, $2), ($1, $3)",
       [conversationId, userId, targetId]
     );
 
     res.json({ success: true, conversationId });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to create conversation." });
   }
@@ -201,12 +213,8 @@ export const getOrCreateConversation = async (req, res) => {
 
 // GET /social/conversations?user_id=X
 export const getConversations = async (req, res) => {
-  const userId = parseInt(req.query.user_id, 10);
-  if (!userId) {
-    return res.status(400).json({ success: false, message: "Missing user_id." });
-  }
-
   try {
+    const userId = validateId(req.query.user_id, "User ID");
     const { rows } = await pool.query(
       `SELECT
          c.id AS conversation_id,
@@ -242,6 +250,9 @@ export const getConversations = async (req, res) => {
     );
     res.json({ success: true, conversations: rows });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to fetch conversations." });
   }
@@ -249,19 +260,22 @@ export const getConversations = async (req, res) => {
 
 // GET /social/conversations/:conversationId/messages?user_id=X
 export const getMessages = async (req, res) => {
-  const conversationId = parseInt(req.params.conversationId, 10);
-  const userId = parseInt(req.query.user_id, 10);
-
-  if (!conversationId || !userId) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-
   try {
+    const conversationId = validateId(req.params.conversationId, "Conversation ID");
+    const userId = validateId(req.query.user_id, "User ID");
+
+    // Authorization: verify user is a member of this conversation
+    const memberCheck = await pool.query(
+      "SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2",
+      [conversationId, userId]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
     // Mark messages from other user as read
     await pool.query(
-      `UPDATE messages
-       SET is_read = true
-       WHERE conversation_id = $1 AND sender_id <> $2`,
+      "UPDATE messages SET is_read = true WHERE conversation_id = $1 AND sender_id <> $2",
       [conversationId, userId]
     );
 
@@ -275,6 +289,9 @@ export const getMessages = async (req, res) => {
 
     res.json({ success: true, messages: rows });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to fetch messages." });
   }
@@ -283,24 +300,37 @@ export const getMessages = async (req, res) => {
 // POST /social/conversations/:conversationId/messages
 // Body: { sender_id, message }
 export const sendMessage = async (req, res) => {
-  const conversationId = parseInt(req.params.conversationId, 10);
-  const senderId = parseInt(req.body.sender_id, 10);
-  const { message } = req.body;
-
-  if (!conversationId || !senderId || !message || !message.trim()) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-
   try {
+    const conversationId = validateId(req.params.conversationId, "Conversation ID");
+    const senderId = validateId(req.body.sender_id, "Sender ID");
+    const message = validateString(req.body.message, "Message", {
+      required: true,
+      allowEmpty: false,
+      maxLength: 5000,
+      escape: false,
+    });
+
+    // Authorization: verify sender is a member of this conversation
+    const memberCheck = await pool.query(
+      "SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2",
+      [conversationId, senderId]
+    );
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
     const result = await pool.query(
       `INSERT INTO messages (conversation_id, sender_id, message)
        VALUES ($1, $2, $3)
        RETURNING id, conversation_id, sender_id, message, created_at, is_read`,
-      [conversationId, senderId, message.trim()]
+      [conversationId, senderId, message]
     );
 
     res.json({ success: true, message: result.rows[0] });
   } catch (err) {
+    if (err.message.startsWith("Invalid") || err.message.includes("required") || err.message.includes("empty") || err.message.includes("exceeds")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to send message." });
   }
@@ -312,12 +342,8 @@ export const sendMessage = async (req, res) => {
 
 // GET /social/stories?user_id=X
 export const getStories = async (req, res) => {
-  const userId = parseInt(req.query.user_id, 10);
-  if (!userId) {
-    return res.status(400).json({ success: false, message: "Missing user_id." });
-  }
-
   try {
+    const userId = validateId(req.query.user_id, "User ID");
     // Only return stories created in the last 24 hours
     const { rows } = await pool.query(
       `SELECT s.id, s.user_id, s.media_url, s.media_type, s.created_at,
@@ -354,6 +380,9 @@ export const getStories = async (req, res) => {
 
     res.json({ success: true, userStories: Object.values(userStoriesMap) });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to fetch stories." });
   }
@@ -362,22 +391,30 @@ export const getStories = async (req, res) => {
 // POST /social/stories
 // Body: { user_id, media_url, media_type }
 export const createStory = async (req, res) => {
-  const { user_id, media_url, media_type } = req.body;
-  const userId = parseInt(user_id, 10);
-
-  if (!userId || !media_url) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-
   try {
+    const userId = validateId(req.body.user_id, "User ID");
+    const mediaUrl = validateString(req.body.media_url, "Media URL", {
+      required: true,
+      allowEmpty: false,
+      maxLength: 2048,
+      escape: false,
+    });
+    const allowedTypes = ["image", "video", "audio"];
+    const mediaType = req.body.media_type && allowedTypes.includes(req.body.media_type)
+      ? req.body.media_type
+      : "image";
+
     const result = await pool.query(
       `INSERT INTO stories (user_id, media_url, media_type)
        VALUES ($1, $2, $3)
        RETURNING id, user_id, media_url, media_type, created_at`,
-      [userId, media_url, media_type || 'image']
+      [userId, mediaUrl, mediaType]
     );
     res.json({ success: true, story: result.rows[0] });
   } catch (err) {
+    if (err.message.startsWith("Invalid") || err.message.includes("required") || err.message.includes("empty") || err.message.includes("exceeds")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to create story." });
   }
@@ -386,22 +423,28 @@ export const createStory = async (req, res) => {
 // POST /social/stories/:storyId/view
 // Body: { user_id }
 export const markStoryViewed = async (req, res) => {
-  const storyId = parseInt(req.params.storyId, 10);
-  const userId = parseInt(req.body.user_id, 10);
-
-  if (!storyId || !userId) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-
   try {
+    const storyId = validateId(req.params.storyId, "Story ID");
+    const userId = validateId(req.body.user_id, "User ID");
+
+    // Verify story exists and is still within 24 hours
+    const storyCheck = await pool.query(
+      "SELECT id FROM stories WHERE id = $1 AND created_at >= NOW() - INTERVAL '24 hours'",
+      [storyId]
+    );
+    if (storyCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Story not found or expired." });
+    }
+
     await pool.query(
-      `INSERT INTO story_views (story_id, user_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
+      "INSERT INTO story_views (story_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
       [storyId, userId]
     );
     res.json({ success: true });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to mark story as viewed." });
   }
@@ -410,14 +453,10 @@ export const markStoryViewed = async (req, res) => {
 // DELETE /social/stories/:storyId
 // Body: { user_id }
 export const deleteStory = async (req, res) => {
-  const storyId = parseInt(req.params.storyId, 10);
-  const userId = parseInt(req.body.user_id, 10);
-
-  if (!storyId || !userId) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-
   try {
+    const storyId = validateId(req.params.storyId, "Story ID");
+    const userId = validateId(req.body.user_id, "User ID");
+
     const check = await pool.query("SELECT user_id FROM stories WHERE id = $1", [storyId]);
     if (check.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Story not found." });
@@ -429,6 +468,9 @@ export const deleteStory = async (req, res) => {
     await pool.query("DELETE FROM stories WHERE id = $1", [storyId]);
     res.json({ success: true });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to delete story." });
   }
@@ -440,12 +482,9 @@ export const deleteStory = async (req, res) => {
 
 // GET /social/collabs?user_id=X
 export const getCollabRequests = async (req, res) => {
-  const userId = parseInt(req.query.user_id, 10);
-  if (!userId) {
-    return res.status(400).json({ success: false, message: "Missing user_id." });
-  }
-
   try {
+    const userId = validateId(req.query.user_id, "User ID");
+
     // Incoming requests
     const incomingRes = await pool.query(
       `SELECT c.id, c.sender_id, c.receiver_id, c.beat_name, c.message, c.role, c.status, c.created_at,
@@ -478,6 +517,9 @@ export const getCollabRequests = async (req, res) => {
       outgoing: outgoingRes.rows
     });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to fetch collab requests." });
   }
@@ -486,36 +528,37 @@ export const getCollabRequests = async (req, res) => {
 // POST /social/collabs
 // Body: { sender_id, receiver_id, beat_name, message, role }
 export const sendCollabRequest = async (req, res) => {
-  const { sender_id, receiver_id, beat_name, message, role } = req.body;
-  const senderId = parseInt(sender_id, 10);
-  const receiverId = parseInt(receiver_id, 10);
-
-  if (!senderId || !receiverId || !role) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-  if (senderId === receiverId) {
-    return res.status(400).json({ success: false, message: "Cannot send collab request to yourself." });
-  }
-
   try {
+    const senderId = validateId(req.body.sender_id, "Sender ID");
+    const receiverId = validateId(req.body.receiver_id, "Receiver ID");
+    const role = validateString(req.body.role, "Role", { required: true, allowEmpty: false, maxLength: 50 });
+    const beatName = validateString(req.body.beat_name, "Beat Name", { maxLength: 255 });
+    const message = validateString(req.body.message, "Message", { maxLength: 1000 });
+
+    if (senderId === receiverId) {
+      return res.status(400).json({ success: false, message: "Cannot send collab request to yourself." });
+    }
+
     const result = await pool.query(
       `INSERT INTO collab_requests (sender_id, receiver_id, beat_name, message, role)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, created_at`,
-      [senderId, receiverId, beat_name || "", message || "", role]
+      [senderId, receiverId, beatName, message, role]
     );
 
     const requestId = result.rows[0].id;
 
     // Send notification to receiver
     await pool.query(
-      `INSERT INTO notifications (recipient_id, actor_id, type, reference_id)
-       VALUES ($1, $2, 'collab_request', $3)`,
+      "INSERT INTO notifications (recipient_id, actor_id, type, reference_id) VALUES ($1, $2, 'collab_request', $3)",
       [receiverId, senderId, requestId]
     );
 
     res.json({ success: true, id: requestId });
   } catch (err) {
+    if (err.message.startsWith("Invalid") || err.message.includes("required") || err.message.includes("empty") || err.message.includes("exceeds")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to send collab request." });
   }
@@ -524,15 +567,15 @@ export const sendCollabRequest = async (req, res) => {
 // PUT /social/collabs/:requestId/status
 // Body: { user_id, status } ('Accepted' | 'Declined')
 export const updateCollabStatus = async (req, res) => {
-  const requestId = parseInt(req.params.requestId, 10);
-  const userId = parseInt(req.body.user_id, 10);
-  const { status } = req.body;
-
-  if (!requestId || !userId || !['Accepted', 'Declined'].includes(status)) {
-    return res.status(400).json({ success: false, message: "Missing or invalid parameters." });
-  }
-
   try {
+    const requestId = validateId(req.params.requestId, "Request ID");
+    const userId = validateId(req.body.user_id, "User ID");
+    const { status } = req.body;
+
+    if (!["Accepted", "Declined"].includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status value." });
+    }
+
     const check = await pool.query("SELECT sender_id, receiver_id, status FROM collab_requests WHERE id = $1", [requestId]);
     if (check.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Collab request not found." });
@@ -580,6 +623,9 @@ export const updateCollabStatus = async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to update collab status." });
   }
@@ -588,14 +634,10 @@ export const updateCollabStatus = async (req, res) => {
 // DELETE /social/collabs/:requestId
 // Body: { user_id }
 export const cancelCollabRequest = async (req, res) => {
-  const requestId = parseInt(req.params.requestId, 10);
-  const userId = parseInt(req.body.user_id, 10);
-
-  if (!requestId || !userId) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-
   try {
+    const requestId = validateId(req.params.requestId, "Request ID");
+    const userId = validateId(req.body.user_id, "User ID");
+
     const check = await pool.query("SELECT sender_id FROM collab_requests WHERE id = $1", [requestId]);
     if (check.rows.length === 0) {
       return res.status(404).json({ success: false, message: "Collab request not found." });
@@ -607,6 +649,9 @@ export const cancelCollabRequest = async (req, res) => {
     await pool.query("DELETE FROM collab_requests WHERE id = $1", [requestId]);
     res.json({ success: true });
   } catch (err) {
+    if (err.message.startsWith("Invalid")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to cancel collab request." });
   }
@@ -615,15 +660,16 @@ export const cancelCollabRequest = async (req, res) => {
 // POST /social/stories/:storyId/reply
 // Body: { sender_id, message }
 export const replyToStory = async (req, res) => {
-  const storyId = parseInt(req.params.storyId, 10);
-  const senderId = parseInt(req.body.sender_id, 10);
-  const { message } = req.body;
-
-  if (!storyId || !senderId || !message || !message.trim()) {
-    return res.status(400).json({ success: false, message: "Missing parameters." });
-  }
-
   try {
+    const storyId = validateId(req.params.storyId, "Story ID");
+    const senderId = validateId(req.body.sender_id, "Sender ID");
+    const message = validateString(req.body.message, "Message", {
+      required: true,
+      allowEmpty: false,
+      maxLength: 5000,
+      escape: false,
+    });
+
     // 1. Find the story owner
     const storyRes = await pool.query("SELECT user_id FROM stories WHERE id = $1", [storyId]);
     if (storyRes.rows.length === 0) {
@@ -648,10 +694,10 @@ export const replyToStory = async (req, res) => {
     if (existing.rows.length > 0) {
       conversationId = existing.rows[0].conversation_id;
     } else {
-      const newConv = await pool.query(`INSERT INTO conversations DEFAULT VALUES RETURNING id`);
+      const newConv = await pool.query("INSERT INTO conversations DEFAULT VALUES RETURNING id");
       conversationId = newConv.rows[0].id;
       await pool.query(
-        `INSERT INTO conversation_members (conversation_id, user_id) VALUES ($1, $2), ($1, $3)`,
+        "INSERT INTO conversation_members (conversation_id, user_id) VALUES ($1, $2), ($1, $3)",
         [conversationId, senderId, targetId]
       );
     }
@@ -673,6 +719,9 @@ export const replyToStory = async (req, res) => {
 
     res.json({ success: true, conversationId, message: msgResult.rows[0] });
   } catch (err) {
+    if (err.message.startsWith("Invalid") || err.message.includes("required") || err.message.includes("empty") || err.message.includes("exceeds")) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
     console.error(err);
     res.status(500).json({ success: false, message: "Failed to reply to story." });
   }

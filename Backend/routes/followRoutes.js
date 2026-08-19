@@ -8,15 +8,16 @@ import {
   getFollowing,
   searchUsers,
 } from "../controllers/followController.js";
+import { arcjetMiddleware, moderateRateLimitRule } from "../utils/arcjet.js";
 
 const router = express.Router();
 
 // Search users
-router.get("/search", searchUsers);
+router.get("/search", arcjetMiddleware([moderateRateLimitRule]), searchUsers);
 
 // Follow / unfollow
-router.post("/:targetId",   followUser);
-router.delete("/:targetId", unfollowUser);
+router.post("/:targetId", arcjetMiddleware([moderateRateLimitRule]), followUser);
+router.delete("/:targetId", arcjetMiddleware([moderateRateLimitRule]), unfollowUser);
 
 // Status & counts
 router.get("/status/:targetId", getFollowStatus);

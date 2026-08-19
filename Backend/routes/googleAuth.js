@@ -1,11 +1,16 @@
 import dotenv from "dotenv"
+import { fileURLToPath } from "url"
+import path from "path"
 import express from "express"
 import passport from "passport"
 import { Strategy as GoogleStrategy } from "passport-google-oauth20"
 import pool from "../db.js"
 import { isFounderEmail } from "../utils/founder.js"
+import { arcjetMiddleware, authRateLimitRule } from "../utils/arcjet.js"
 
-dotenv.config()
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+dotenv.config({ path: path.join(__dirname, "../.env") })
 const router = express.Router();
 
 passport.serializeUser((user, done) => {
@@ -70,9 +75,9 @@ async (accessToken, refreshToken, profile, cb) => {
   }
 }));
 
-router.get("/google", passport.authenticate("google", { scope: ["profile", "email"], prompt: "select_account" }))
+router.get("/google", arcjetMiddleware([authRateLimitRule]), passport.authenticate("google", { scope: ["profile", "email"], prompt: "select_account" }))
 
-router.get("/google/callback", passport.authenticate("google", { failureRedirect: "http://localhost:5173/login" }),
+router.get("/google/callback", arcjetMiddleware([authRateLimitRule]), passport.authenticate("google", { failureRedirect: "http://localhost:5173/login" }),
   (req, res) => {
     const user = req.user
     const profileComplete = user.profile_complete ? "true" : "false"

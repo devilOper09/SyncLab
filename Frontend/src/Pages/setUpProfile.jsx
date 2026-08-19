@@ -25,6 +25,7 @@ function SetUpProfile() {
   const [bio, setBio]                 = useState("")
   const [genres, setGenres]           = useState([])
   const [avatarUrl, setAvatarUrl]     = useState(googleAvatar)
+  const [avatarFile, setAvatarFile]   = useState(null)
 
   // Step 3 — first post fields
   const [postCaption,  setPostCaption]  = useState("")
@@ -55,7 +56,12 @@ function SetUpProfile() {
   const handleCropComplete = async (croppedBlob) => {
     setCropperImage(null)
     const file = new File([croppedBlob], "cropped-image.jpg", { type: "image/jpeg" })
-    await handleFileUpload(file, cropperCallback)
+    if (cropperCallback === setAvatarUrl) {
+      setAvatarFile(file)
+      setAvatarUrl(URL.createObjectURL(file))
+    } else if (cropperCallback) {
+      await handleFileUpload(file, cropperCallback)
+    }
   }
 
   const handleFileUpload = async (file, setUrl) => {
@@ -93,14 +99,19 @@ function SetUpProfile() {
     }
     setLoading(true)
     try {
-      const res = await api.post("/profile/setup", {
-        user_id,
-        display_name: displayName.trim() || username,
-        username,
-        role,
-        bio,
-        genres,
-        avatar_url: avatarUrl,
+      const formData = new FormData()
+      formData.append("user_id", user_id)
+      formData.append("display_name", displayName.trim() || username)
+      formData.append("username", username)
+      formData.append("role", role)
+      formData.append("bio", bio)
+      formData.append("genres", JSON.stringify(genres))
+      formData.append("avatar_url", avatarUrl || "")
+      if (avatarFile) {
+        formData.append("profilePicture", avatarFile)
+      }
+      const res = await api.post("/profile/setup", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
       })
       if (res.data.success) {
         localStorage.setItem("profile_complete", "true")

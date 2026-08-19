@@ -170,8 +170,9 @@ function YourProfile() {
   const [postCaption, setPostCaption] = useState("")
   const [postGenre, setPostGenre] = useState("")
   const [postType, setPostType] = useState("beat")
-  const [postAudioUrl, setPostAudioUrl] = useState("")
+  const [postAudioFile, setPostAudioFile] = useState(null)
   const [postCoverUrl, setPostCoverUrl] = useState("")
+  const [postCoverFile, setPostCoverFile] = useState(null)
   const [postVisibility, setPostVisibility] = useState("public")
   const [submittingPost, setSubmittingPost] = useState(false)
 
@@ -183,6 +184,7 @@ function YourProfile() {
   const [editRole, setEditRole] = useState("")
   const [editGenres, setEditGenres] = useState([])
   const [editAvatarUrl, setEditAvatarUrl] = useState("")
+  const [editAvatarFile, setEditAvatarFile] = useState(null)
   const [editCoverUrl, setEditCoverUrl] = useState("")
   const [uploadingFile, setUploadingFile] = useState(false)
   const [updatingProfile, setUpdatingProfile] = useState(false)
@@ -208,7 +210,13 @@ function YourProfile() {
   const handleCropComplete = async (croppedBlob) => {
     setCropperImage(null)
     const file = new File([croppedBlob], "cropped-image.jpg", { type: "image/jpeg" })
-    if (cropperCallback) {
+    if (cropperCallback === setEditAvatarUrl) {
+      setEditAvatarFile(file)
+      setEditAvatarUrl(URL.createObjectURL(file))
+    } else if (cropperCallback === setPostCoverUrl) {
+      setPostCoverFile(file)
+      setPostCoverUrl(URL.createObjectURL(file))
+    } else if (cropperCallback) {
       await handleFileUpload(file, cropperCallback)
     }
   }
@@ -317,15 +325,20 @@ function YourProfile() {
     }
     setUpdatingProfile(true)
     try {
-      const res = await api.put("/profile/update", {
-        user_id,
-        display_name: editDisplayName,
-        username: editUsername,
-        role: editRole,
-        bio: editBio,
-        genres: editGenres,
-        avatar_url: editAvatarUrl,
-        cover_url: editCoverUrl,
+      const formData = new FormData()
+      formData.append("user_id", user_id)
+      formData.append("display_name", editDisplayName)
+      formData.append("username", editUsername)
+      formData.append("role", editRole)
+      formData.append("bio", editBio)
+      formData.append("genres", JSON.stringify(editGenres))
+      formData.append("avatar_url", editAvatarUrl || "")
+      formData.append("cover_url", editCoverUrl || "")
+      if (editAvatarFile) {
+        formData.append("profilePicture", editAvatarFile)
+      }
+      const res = await api.put("/profile/update", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
       })
       if (res.data.success) {
         toast.success("Profile updated successfully!")
@@ -347,6 +360,7 @@ function YourProfile() {
     setEditRole(profile.role || "")
     setEditGenres(profile.genres || [])
     setEditAvatarUrl(profile.avatar_url || "")
+    setEditAvatarFile(null)
     setEditCoverUrl(profile.cover_url || "")
     setShowEditModal(true)
   }
@@ -575,24 +589,24 @@ function YourProfile() {
 
   const handleCreatePost = async (e) => {
     e.preventDefault()
-    if (!postAudioUrl) {
-      toast.error("Audio file is required to post.")
-      return
-    }
     setSubmittingPost(true)
     try {
-      await api.post("/profile/post", {
-        user_id,
-        caption: postCaption,
-        genre: postGenre,
-        post_type: postType,
-        audio_url: postAudioUrl,
-        cover_url: postCoverUrl || null,
-        visibility: postVisibility,
+      const formData = new FormData()
+      formData.append("user_id", user_id)
+      formData.append("caption", postCaption)
+      formData.append("genre", postGenre)
+      formData.append("post_type", postType)
+      formData.append("cover_url", postCoverUrl || "")
+      formData.append("visibility", postVisibility)
+      if (postAudioFile) {
+        formData.append("audio", postAudioFile)
+      }
+      await api.post("/profile/post", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
       })
       toast.success("Post uploaded!")
       setShowPostForm(false)
-      setPostCaption(""); setPostGenre(""); setPostAudioUrl(""); setPostCoverUrl(""); setPostVisibility("public")
+      setPostCaption(""); setPostGenre(""); setPostAudioFile(null); setPostCoverUrl(""); setPostVisibility("public")
       fetchPosts()
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to post.")
@@ -1141,13 +1155,12 @@ function YourProfile() {
                 <label className="text-xs text-gray-400">Audio File *</label>
                 <label className="w-full flex items-center gap-3 px-4 py-2.5 bg-white/5 text-slate-300 rounded-xl border border-white/10 cursor-pointer hover:bg-white/10 transition duration-200 text-sm">
                   <Music size={16} className="text-gray-500" />
-                  <span className="truncate">{uploadingFile ? "Uploading..." : postAudioUrl ? "Audio Uploaded ✓" : "Choose Audio File *"}</span>
+                  <span className="truncate">{postAudioFile ? "Audio Selected ✓" : "Choose Audio File *"}</span>
                   <input
                     type="file"
                     accept="audio/*"
-                    disabled={uploadingFile}
                     onChange={e => {
-                      if (e.target.files[0]) handleFileUpload(e.target.files[0], setPostAudioUrl)
+                      if (e.target.files[0]) setPostAudioFile(e.target.files[0])
                     }}
                     className="hidden"
                   />

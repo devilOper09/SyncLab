@@ -1,10 +1,6 @@
 import pool from "../db.js";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+import { v2 as cloudinary } from "cloudinary";
+import { validateId, validateUsername, validateString, validateGenres, validatePostType, validateVisibility } from "../utils/validation.js";
 
 // PUT /profile/update
 export const updateProfile = async (req, res) => {
@@ -15,47 +11,56 @@ export const updateProfile = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required fields." });
     }
 
+    const cleanUserId = validateId(user_id, "User ID");
+    const cleanUsername = validateUsername(username);
+    const cleanRole = validateString(role, "Role", { required: true, maxLength: 50 });
+    const cleanDisplayName = validateString(display_name, "Display Name", { maxLength: 100 }) || cleanUsername;
+    const cleanBio = validateString(bio, "Bio", { maxLength: 500 });
+    const parsedGenres = typeof genres === "string" ? JSON.parse(genres) : genres;
+    const cleanGenres = validateGenres(parsedGenres);
+    const cleanAvatarUrl = validateString(avatar_url, "Avatar URL", { maxLength: 2048, escape: false });
+    const cleanCoverUrl = validateString(cover_url, "Cover URL", { maxLength: 2048, escape: false });
+
     // Check username uniqueness
     const taken = await pool.query(
       "SELECT 1 FROM SyncLabUsers WHERE username = $1 AND id != $2",
-      [username.toLowerCase().trim(), user_id]
+      [cleanUsername, cleanUserId]
     );
     if (taken.rows.length > 0) {
       return res.status(409).json({ success: false, message: "Username is already taken." });
     }
 
-    const isUploaded = avatar_url && avatar_url.includes('/uploads/');
-    const profile_picture = isUploaded ? avatar_url : null;
+    const profile_picture = req.file?.path || null;
 
     await pool.query(
-      `UPDATE SyncLabUsers
-       SET display_name = $1,
-           username     = $2,
-           role         = $3,
-           bio          = $4,
-           genres       = $5,
-           avatar_url   = $6,
-           avatar       = $6,
-           profile_picture = $7,
-           cover_url    = $8
-       WHERE id = $9`,
-      [
-        display_name.trim() || username,
-        username.toLowerCase().trim(),
-        role,
-        bio || "",
-        genres || [],
-        avatar_url || null,
-        profile_picture,
-        cover_url || null,
-        user_id,
-      ]
-    );
+  `UPDATE SyncLabUsers 
+   SET display_name = $1, 
+       username     = $2, 
+       role         = $3, 
+       bio          = $4, 
+       genres       = $5, 
+       avatar_url   = $6, 
+       avatar       = $6, 
+       profile_picture = $7, 
+       cover_url    = $8 
+   WHERE id = $9`,
+  [
+    cleanDisplayName,
+    cleanUsername,
+    cleanRole,
+    cleanBio,
+    cleanGenres,
+    profile_picture || cleanAvatarUrl || null, // $6 — Cloudinary URL if uploaded, else preserve existing
+    profile_picture, // $7
+    cleanCoverUrl,   // $8
+    cleanUserId,     // $9
+  ]
+);
 
     res.json({ success: true, message: "Profile updated successfully." });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Failed to update profile." });
+    res.status(400).json({ success: false, message: error.message || "Failed to update profile." });
   }
 };
 
@@ -68,17 +73,25 @@ export const setupProfile = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing required fields." });
     }
 
+    const cleanUserId = validateId(user_id, "User ID");
+    const cleanUsername = validateUsername(username);
+    const cleanRole = validateString(role, "Role", { required: true, maxLength: 50 });
+    const cleanDisplayName = validateString(display_name, "Display Name", { required: true, maxLength: 100 });
+    const cleanBio = validateString(bio, "Bio", { maxLength: 500 });
+    const parsedGenres = typeof genres === "string" ? JSON.parse(genres) : genres;
+    const cleanGenres = validateGenres(parsedGenres);
+    const cleanAvatarUrl = validateString(avatar_url, "Avatar URL", { maxLength: 2048, escape: false });
+
     // Check username uniqueness
     const taken = await pool.query(
       "SELECT 1 FROM SyncLabUsers WHERE username = $1 AND id != $2",
-      [username.toLowerCase().trim(), user_id]
+      [cleanUsername, cleanUserId]
     );
     if (taken.rows.length > 0) {
       return res.status(409).json({ success: false, message: "Username is already taken." });
     }
 
-    const isUploaded = avatar_url && avatar_url.includes('/uploads/');
-    const profile_picture = isUploaded ? avatar_url : null;
+    const profile_picture = req.file?.path || null;
 
     await pool.query(
       `UPDATE SyncLabUsers
@@ -93,28 +106,28 @@ export const setupProfile = async (req, res) => {
            profile_complete = true
        WHERE id = $8`,
       [
-        display_name.trim(),
-        username.toLowerCase().trim(),
-        role,
-        bio || "",
-        genres || [],
-        avatar_url || null,
+        cleanDisplayName,
+        cleanUsername,
+        cleanRole,
+        cleanBio,
+        cleanGenres,
+        profile_picture || cleanAvatarUrl || null,
         profile_picture,
-        user_id,
+        cleanUserId,
       ]
     );
 
     res.json({ success: true, message: "Profile saved." });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Failed to save profile." });
+    res.status(400).json({ success: false, message: error.message || "Failed to save profile." });
   }
 };
 
 // GET /profile/:userId
 export const getProfile = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const cleanUserId = validateId(req.params.userId, "User ID");
 
     const result = await pool.query(
       `SELECT id, email, display_name, username, role, bio, genres,
@@ -122,7 +135,7 @@ export const getProfile = async (req, res) => {
               avatar, cover_url, profile_complete, is_founder,
               followers_count, following_count, profile_picture
        FROM SyncLabUsers WHERE id = $1`,
-      [userId]
+      [cleanUserId]
     );
 
     if (result.rows.length === 0) {
@@ -132,28 +145,28 @@ export const getProfile = async (req, res) => {
     res.json({ success: true, profile: result.rows[0] });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Failed to fetch profile." });
+    res.status(400).json({ success: false, message: error.message || "Failed to fetch profile." });
   }
 };
 
 // GET /profile/:userId/posts
 export const getPostsByUser = async (req, res) => {
   try {
-    const { userId } = req.params;
-    const viewerId = req.query.viewer_id ? parseInt(req.query.viewer_id, 10) : null;
+    const cleanUserId = validateId(req.params.userId, "User ID");
+    const viewerId = req.query.viewer_id ? validateId(req.query.viewer_id, "Viewer ID") : null;
 
     const result = await pool.query(
       `SELECT id, user_id, caption, genre, post_type, audio_url, cover_url, created_at, visibility
        FROM MusicPosts
        WHERE user_id = $1
        ORDER BY created_at DESC`,
-      [userId]
+      [cleanUserId]
     );
 
     // Filter posts: if visibility is 'private', only show if viewerId === userId
     const filteredPosts = result.rows.filter(post => {
       if (post.visibility === 'private') {
-        return viewerId === parseInt(userId, 10);
+        return viewerId === cleanUserId;
       }
       return true;
     });
@@ -161,42 +174,52 @@ export const getPostsByUser = async (req, res) => {
     res.json({ success: true, posts: filteredPosts });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Failed to fetch posts." });
+    res.status(400).json({ success: false, message: error.message || "Failed to fetch posts." });
   }
 };
 
 // POST /profile/post
 export const createPost = async (req, res) => {
   try {
-    const { user_id, caption, genre, post_type, audio_url, cover_url, visibility } = req.body;
+    const { user_id, caption, genre, post_type, cover_url, visibility } = req.body;
 
     if (!user_id || !post_type) {
       return res.status(400).json({ success: false, message: "Missing required fields." });
     }
 
+    const cleanUserId = validateId(user_id, "User ID");
+    const cleanCaption = validateString(caption, "Caption", { maxLength: 1000 });
+    const cleanGenre = validateString(genre, "Genre", { maxLength: 100 });
+    const cleanPostType = validatePostType(post_type);
+    const audioUrl = req.files?.["audio"]?.[0]?.path || null;
+    const coverUrl = req.files?.["cover"]?.[0]?.path || null;
+    const cleanCoverUrl = coverUrl || validateString(cover_url, "Cover URL", { maxLength: 2048, escape: false }) || null;
+    const cleanVisibility = validateVisibility(visibility);
+
     const result = await pool.query(
       `INSERT INTO MusicPosts (user_id, caption, genre, post_type, audio_url, cover_url, visibility)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, created_at`,
-      [user_id, caption || "", genre || "", post_type, audio_url || null, cover_url || null, visibility || 'public']
+      [cleanUserId, cleanCaption, cleanGenre, cleanPostType, audioUrl, cleanCoverUrl || null, cleanVisibility]
     );
 
     res.json({ success: true, post: result.rows[0] });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Failed to create post." });
+    res.status(400).json({ success: false, message: error.message || "Failed to create post." });
   }
 };
 
 // DELETE /profile/post/:postId
 export const deletePost = async (req, res) => {
   try {
-    const { postId } = req.params;
+    const cleanPostId = validateId(req.params.postId, "Post ID");
     const { user_id } = req.body;
+    const cleanUserId = validateId(user_id, "User ID");
 
     const postRes = await pool.query(
       "SELECT user_id, audio_url, cover_url FROM MusicPosts WHERE id = $1",
-      [postId]
+      [cleanPostId]
     );
 
     if (postRes.rows.length === 0) {
@@ -205,33 +228,31 @@ export const deletePost = async (req, res) => {
 
     const post = postRes.rows[0];
 
-    if (post.user_id !== parseInt(user_id)) {
+    if (post.user_id !== cleanUserId) {
       return res.status(403).json({ success: false, message: "Unauthorized to delete this post." });
     }
 
-    const deleteLocalFile = (fileUrl) => {
-      if (!fileUrl) return;
+    const deleteCloudinaryFile = async (fileUrl, resourceType = "image") => {
+      if (!fileUrl || !fileUrl.includes("cloudinary")) return;
       try {
-        const filename = fileUrl.split("/uploads/")[1];
-        if (filename) {
-          const filePath = path.join(__dirname, "..", "uploads", filename);
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
+        const parts = fileUrl.split("/upload/");
+        if (parts[1]) {
+          const publicId = parts[1].split("/").slice(1).join("/").replace(/\.[^/.]+$/, "");
+          await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
         }
       } catch (err) {
-        console.error("Failed to delete local file:", err);
+        console.error("Failed to delete Cloudinary file:", err);
       }
     };
 
-    deleteLocalFile(post.audio_url);
-    deleteLocalFile(post.cover_url);
+    await deleteCloudinaryFile(post.audio_url, "video");
+    await deleteCloudinaryFile(post.cover_url, "image");
 
-    await pool.query("DELETE FROM MusicPosts WHERE id = $1", [postId]);
+    await pool.query("DELETE FROM MusicPosts WHERE id = $1", [cleanPostId]);
 
     res.json({ success: true, message: "Post deleted successfully." });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Failed to delete post." });
+    res.status(400).json({ success: false, message: error.message || "Failed to delete post." });
   }
 };

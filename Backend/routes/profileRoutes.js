@@ -7,14 +7,29 @@ import {
   createPost,
   deletePost,
 } from "../controllers/profileController.js";
+import { arcjetMiddleware, moderateRateLimitRule } from "../utils/arcjet.js";
+import upload from "../utils/upload.js";
+import audioUpload from "../utils/audioUplaod.js";
 
 const router = express.Router();
 
-router.post("/setup", setupProfile);
-router.put("/update", updateProfile);
+router.post("/setup", arcjetMiddleware([moderateRateLimitRule]),upload.single("profilePicture"), setupProfile);
+router.put("/update", arcjetMiddleware([moderateRateLimitRule]),upload.single("profilePicture"), updateProfile);
 router.get("/:userId", getProfile);
 router.get("/:userId/posts", getPostsByUser);
-router.post("/post", createPost);
-router.delete("/post/:postId", deletePost);
+router.post(
+  "/post",
+  arcjetMiddleware([moderateRateLimitRule]),
+  audioUpload.fields([
+    { name: "audio", maxCount: 1 },
+    { name: "cover", maxCount: 1 },
+  ]),
+  createPost
+);
+router.delete(
+  "/post/:postId",
+  arcjetMiddleware([moderateRateLimitRule]),
+  deletePost
+);
 
 export default router;

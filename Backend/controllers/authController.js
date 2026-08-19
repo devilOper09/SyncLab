@@ -2,18 +2,19 @@ import pool from "../db.js";
 import validator from "validator"; 
 import bcrypt from "bcrypt";
 import { isFounderEmail, normalizeEmail } from "../utils/founder.js";
+import { validateEmail, validateString } from "../utils/validation.js";
 
 export const signup = async(req, res)=>{
     try {
 
         const {email, password} = req.body
-        const normalizedEmail = normalizeEmail(email);
-        if(!validator.isEmail(normalizedEmail)){
-            return res.status(400).json({
-                success:false,
-                message: "please enter a valid email address"
-            })
-        }
+        const normalizedEmail = validateEmail(email);
+        const cleanPassword = validateString(password, "Password", {
+            required: true,
+            minLength: 6,
+            maxLength: 100,
+            escape: false
+        });
         const existingUser = await pool.query(
             "SELECT 1 FROM SyncLabUsers WHERE email = $1",
             [normalizedEmail]
@@ -25,7 +26,7 @@ export const signup = async(req, res)=>{
             })
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10)
+        const hashedPassword = await bcrypt.hash(cleanPassword, 10)
 
         const inserted = await pool.query(
             "INSERT INTO SyncLabUsers(email, password, is_founder) VALUES ($1,$2,false) RETURNING id, profile_complete, is_founder",
@@ -37,7 +38,7 @@ export const signup = async(req, res)=>{
         
     } catch (error) {
         console.log(error)
-        res.status(500).json({error:"SignUp failed"})
+        res.status(400).json({ success: false, message: error.message || "SignUp failed" })
         
     }
 }
@@ -46,7 +47,11 @@ export const login = async(req, res)=>{
 
     try{
     const {email, password} = req.body
-    const normalizedEmail = normalizeEmail(email)
+    const normalizedEmail = validateEmail(email)
+    const cleanPassword = validateString(password, "Password", {
+        required: true,
+        escape: false
+    });
 
     const result = await pool.query(
         "SELECT * FROM SyncLabUsers WHERE email=$1",
@@ -54,11 +59,11 @@ export const login = async(req, res)=>{
     )
     const user = result.rows[0]
 
-    if(!user){
+    if(!user || !user.password){
         return res.status(400).json({message:"Invalid email or password", success:false})
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password)
+    const passwordMatch = await bcrypt.compare(cleanPassword, user.password)
     if(!passwordMatch){
         return res.status(400).json({message:"Invalid email or password", success:false})
     }
@@ -77,7 +82,7 @@ export const login = async(req, res)=>{
 
 }catch(error){
     console.log(error)
-    res.status(500).json({error:"Login Failed"})
+    res.status(400).json({ success: false, message: error.message || "Login Failed" })
 
 }
 }

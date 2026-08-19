@@ -1,4 +1,5 @@
 import pool from "../db.js";
+import { validateId, validateString } from "../utils/validation.js";
 
 // Ensure follows table exists
 export const ensureFollowsTable = async () => {
@@ -20,17 +21,14 @@ export const ensureFollowsTable = async () => {
 
 // POST /follow/:targetId  { user_id }
 export const followUser = async (req, res) => {
-  const followerId  = parseInt(req.body.user_id, 10);
-  const followingId = parseInt(req.params.targetId, 10);
-
-  if (!followerId || !followingId) {
-    return res.status(400).json({ success: false, message: "Missing user IDs." });
-  }
-  if (followerId === followingId) {
-    return res.status(400).json({ success: false, message: "Cannot follow yourself." });
-  }
-
   try {
+    const followerId  = validateId(req.body.user_id, "Follower ID");
+    const followingId = validateId(req.params.targetId, "Following ID");
+
+    if (followerId === followingId) {
+      return res.status(400).json({ success: false, message: "Cannot follow yourself." });
+    }
+
     // Insert follow relationship
     const insertRes = await pool.query(
       `INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING id`,
@@ -63,20 +61,16 @@ export const followUser = async (req, res) => {
     res.json({ success: true, followers: parseInt(rows[0].count, 10) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Failed to follow user." });
+    res.status(400).json({ success: false, message: err.message || "Failed to follow user." });
   }
 };
 
 // DELETE /follow/:targetId  { user_id }
 export const unfollowUser = async (req, res) => {
-  const followerId  = parseInt(req.body.user_id, 10);
-  const followingId = parseInt(req.params.targetId, 10);
-
-  if (!followerId || !followingId) {
-    return res.status(400).json({ success: false, message: "Missing user IDs." });
-  }
-
   try {
+    const followerId  = validateId(req.body.user_id, "Follower ID");
+    const followingId = validateId(req.params.targetId, "Following ID");
+
     // Delete follow relationship
     const deleteRes = await pool.query(
       `DELETE FROM follows WHERE follower_id = $1 AND following_id = $2 RETURNING id`,
@@ -102,20 +96,16 @@ export const unfollowUser = async (req, res) => {
     res.json({ success: true, followers: parseInt(rows[0].count, 10) });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, message: "Failed to unfollow user." });
+    res.status(400).json({ success: false, message: err.message || "Failed to unfollow user." });
   }
 };
 
 // GET /follow/status/:targetId?user_id=X
 export const getFollowStatus = async (req, res) => {
-  const followerId  = parseInt(req.query.user_id, 10);
-  const followingId = parseInt(req.params.targetId, 10);
-
-  if (!followerId || !followingId) {
-    return res.json({ isFollowing: false });
-  }
-
   try {
+    const followerId  = validateId(req.query.user_id, "Follower ID");
+    const followingId = validateId(req.params.targetId, "Following ID");
+
     const { rows } = await pool.query(
       `SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2`,
       [followerId, followingId]
@@ -123,14 +113,14 @@ export const getFollowStatus = async (req, res) => {
     res.json({ isFollowing: rows.length > 0 });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ isFollowing: false });
+    res.json({ isFollowing: false });
   }
 };
 
 // GET /follow/counts/:userId
 export const getFollowCounts = async (req, res) => {
-  const userId = parseInt(req.params.userId, 10);
   try {
+    const userId = validateId(req.params.userId, "User ID");
     const [followers, following] = await Promise.all([
       pool.query(`SELECT COUNT(*) AS count FROM follows WHERE following_id = $1`, [userId]),
       pool.query(`SELECT COUNT(*) AS count FROM follows WHERE follower_id  = $1`, [userId]),
@@ -141,15 +131,15 @@ export const getFollowCounts = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ followers: 0, following: 0 });
+    res.status(400).json({ followers: 0, following: 0 });
   }
 };
 
 // GET /follow/followers/:userId  — list of users following userId
 export const getFollowers = async (req, res) => {
-  const userId = parseInt(req.params.userId, 10);
-  const currentUserId = parseInt(req.query.user_id, 10) || null;
   try {
+    const userId = validateId(req.params.userId, "User ID");
+    const currentUserId = req.query.user_id ? validateId(req.query.user_id, "User ID") : null;
     const { rows } = await pool.query(
       `SELECT u.id, u.username, u.display_name,
               COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
@@ -166,15 +156,15 @@ export const getFollowers = async (req, res) => {
     res.json({ success: true, users: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, users: [] });
+    res.status(400).json({ success: false, users: [] });
   }
 };
 
 // GET /follow/following/:userId  — list of users that userId follows
 export const getFollowing = async (req, res) => {
-  const userId = parseInt(req.params.userId, 10);
-  const currentUserId = parseInt(req.query.user_id, 10) || null;
   try {
+    const userId = validateId(req.params.userId, "User ID");
+    const currentUserId = req.query.user_id ? validateId(req.query.user_id, "User ID") : null;
     const { rows } = await pool.query(
       `SELECT u.id, u.username, u.display_name,
               COALESCE(u.profile_picture, u.avatar_url) AS avatar_url,
@@ -191,17 +181,18 @@ export const getFollowing = async (req, res) => {
     res.json({ success: true, users: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, users: [] });
+    res.status(400).json({ success: false, users: [] });
   }
 };
 
 // GET /follow/search?q=&role=&user_id=
 export const searchUsers = async (req, res) => {
-  const { q = "", role = "", user_id } = req.query;
-  const currentUserId = parseInt(user_id, 10) || null;
-  const term = q.trim();
-
   try {
+    const { q = "", role = "", user_id } = req.query;
+    const currentUserId = user_id ? validateId(user_id, "User ID") : null;
+    const term = validateString(q, "Search Query", { maxLength: 100 });
+    const cleanRole = validateString(role, "Role Filter", { maxLength: 50 });
+
     const { rows } = await pool.query(
       `SELECT
          u.id,
@@ -226,11 +217,11 @@ export const searchUsers = async (req, res) => {
          AND ($3::int IS NULL OR u.id <> $3)
        ORDER BY followers_count DESC, u.display_name ASC
        LIMIT 50`,
-      [term, role, currentUserId]
+      [term, cleanRole, currentUserId]
     );
     res.json({ success: true, users: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, users: [] });
+    res.status(400).json({ success: false, users: [] });
   }
 };

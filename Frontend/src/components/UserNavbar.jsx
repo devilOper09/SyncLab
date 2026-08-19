@@ -52,10 +52,10 @@ function UserNavbar() {
         </h1>
       </Link>
 
-      <div className="flex gap-8">
+      {/* <div className="flex gap-8">
         {navLink("/explore", "Explore")}
         {navLink("/collabs", "Collabs")}
-      </div>
+      </div> */}
 
       <div className="flex gap-4 items-center">
         <Link to="/message">
