@@ -3,43 +3,29 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Initialize Arcjet client
-const aj = arcjet({
-  key: process.env.ARCJET_KEY,
-  characteristics: ["ip.src"], // track requests by IP address
-  rules: [
-    // Shield protects against common attacks (SQLi, XSS, etc.)
-    shield({
-      mode: "LIVE",
-    }),
-    // Bot detection
-    detectBot({
-      mode: "LIVE",
-      // Allow search engines but block scrapers/crawlers
-      allow: [
-        "CATEGORY:SEARCH_ENGINE",
-      ],
-    }),
-  ],
-});
+// Base rules applied to every request
+const baseRules = [
+  shield({ mode: "LIVE" }),
+  detectBot({
+    mode: "LIVE",
+    allow: ["CATEGORY:SEARCH_ENGINE"],
+  }),
+];
 
 // Helper middleware to run Arcjet on specific endpoints
 export const arcjetMiddleware = (customRules = []) => {
   return async (req, res, next) => {
     try {
-      // If ARCJET_KEY is not configured, skip in development to avoid blocking
+      // If ARCJET_KEY is not configured, skip to avoid blocking
       if (!process.env.ARCJET_KEY) {
         return next();
       }
 
-      // Create a request-specific client if custom rules are provided
-      const client = customRules.length > 0 
-        ? arcjet({
-            key: process.env.ARCJET_KEY,
-            characteristics: ["ip.src"],
-            rules: [...aj.rules, ...customRules]
-          })
-        : aj;
+      const client = arcjet({
+        key: process.env.ARCJET_KEY,
+        characteristics: ["ip.src"],
+        rules: [...baseRules, ...customRules],
+      });
 
       const decision = await client.protect(req);
 
