@@ -271,30 +271,36 @@ app.get("/api/posts", async (req, res) => {
 
 app.post("/api/posts", async (req, res) => {
   try {
-    const userName = validateUsername(req.body.userName);
     const caption = validateString(req.body.caption, "Caption", { maxLength: 1000 });
 
-    const userRes = await pool.query("SELECT id FROM SyncLabUsers WHERE username = $1", [userName]);
     let userId;
-    if (userRes.rows.length > 0) {
-      userId = userRes.rows[0].id;
-    } else {
-      const firstUser = await pool.query("SELECT id FROM SyncLabUsers LIMIT 1");
-      if (firstUser.rows.length > 0) {
-        userId = firstUser.rows[0].id;
-      } else {
-        return res.status(400).json({ error: "No users exist to associate with this post" });
+    if (req.body.user_id) {
+      userId = validateId(req.body.user_id, "User ID");
+      const check = await pool.query("SELECT id FROM SyncLabUsers WHERE id = $1", [userId]);
+      if (check.rows.length === 0) {
+        return res.status(400).json({ error: "User not found." });
       }
+    } else if (req.body.userName) {
+      const userName = validateUsername(req.body.userName);
+      const userRes = await pool.query("SELECT id FROM SyncLabUsers WHERE username = $1", [userName]);
+      if (userRes.rows.length > 0) {
+        userId = userRes.rows[0].id;
+      } else {
+        return res.status(400).json({ error: "User not found." });
+      }
+    } else {
+      return res.status(400).json({ error: "user_id is required." });
     }
+
     const result = await pool.query(
       `INSERT INTO MusicPosts (user_id, caption, post_type)
-       VALUES ($1, $2, 'beat')
+       VALUES ($1, $2, 'thread')
        RETURNING id`,
       [userId, caption]
     );
     res.json({ success: true, id: result.rows[0].id });
   } catch (err) {
-    console.error(err);
+    console.error("POST /api/posts error:", err);
     res.status(400).json({ error: err.message || "Failed to create post" });
   }
 });

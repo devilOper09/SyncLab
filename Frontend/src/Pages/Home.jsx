@@ -108,7 +108,6 @@ function Home() {
   const [hasMore, setHasMore] = useState(true);
 
   const loggedInUserId = localStorage.getItem("user_id");
-  const loggedInUsername = localStorage.getItem("display_name") || "Tensick";
 
   const { activeTrack, isPlaying, playTrack } = useAudioPlayer();
 
@@ -184,9 +183,13 @@ function Home() {
 
   const handlePost = async () => {
     if (!caption.trim()) return;
+    if (!loggedInUserId) {
+      toast.error("Please log in first.");
+      return;
+    }
     try {
       await api.post("/api/posts", {
-        userName: loggedInUsername,
+        user_id: loggedInUserId,
         caption,
       });
       setCaption("");
@@ -196,7 +199,8 @@ function Home() {
       toast.success("Post created successfully!");
     } catch (err) {
       console.error("Failed to create post:", err);
-      toast.error("Failed to create post.");
+      const msg = err.response?.data?.message || err.response?.data?.error || "Failed to create post.";
+      toast.error(msg);
     }
   };
 
@@ -818,17 +822,13 @@ function Home() {
                                     <X size={16} />
                                   </button>
                                 </div>
-                              ) : (
+                              ) : post.cover_url ? (
                                 <div className="relative aspect-square w-full rounded-lg overflow-hidden bg-slate-800 border border-white/5 shadow-inner flex items-center justify-center">
-                                  {post.cover_url ? (
-                                    <img 
-                                      src={post.cover_url} 
-                                      alt={post.caption} 
-                                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                    />
-                                  ) : (
-                                    <div className="text-indigo-400 text-3xl">🎵</div>
-                                  )}
+                                  <img 
+                                    src={post.cover_url} 
+                                    alt={post.caption} 
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                  />
                                   {/* Play Button Overlay - Show only on hover */}
                                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                                     <button 
@@ -839,6 +839,20 @@ function Home() {
                                     </button>
                                   </div>
                                 </div>
+                              ) : (
+                                // Audio-only post: compact play button row, no blank artwork area
+                                <button
+                                  onClick={() => handlePlayPause(post)}
+                                  className="flex items-center gap-3 w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 hover:bg-black/30 transition-colors"
+                                >
+                                  <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                                    <Play size={16} className="ml-0.5" />
+                                  </div>
+                                  <div className="flex flex-col items-start min-w-0">
+                                    <span className="text-xs font-semibold text-white truncate w-full">Play Track</span>
+                                    <span className="text-[10px] text-gray-500">Tap to listen</span>
+                                  </div>
+                                </button>
                               )}
                             </div>
                           )}

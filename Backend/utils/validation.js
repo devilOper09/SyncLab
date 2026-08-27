@@ -109,7 +109,7 @@ export const validatePostType = (postType) => {
     throw new Error("Post type is required.");
   }
   const clean = String(postType).trim().toLowerCase();
-  if (!["beat", "post"].includes(clean)) {
+  if (!["beat", "post", "beat_snippet", "song_snippet", "thread"].includes(clean)) {
     throw new Error("Invalid post type.");
   }
   return clean;
