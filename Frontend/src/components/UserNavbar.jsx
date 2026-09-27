@@ -73,6 +73,7 @@ function UserNavbar() {
               alt={displayName || 'Profile'}
               className="w-8 h-8 rounded-full object-cover border-2 border-transparent group-hover:border-indigo-400 transition-all duration-200"
               referrerPolicy="no-referrer"
+              onError={() => { setAvatar(null); localStorage.removeItem('avatar') }}
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-indigo-950/50 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:border-indigo-400 transition-all duration-200">

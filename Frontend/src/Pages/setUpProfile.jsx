@@ -106,7 +106,7 @@ function SetUpProfile() {
       formData.append("role", role)
       formData.append("bio", bio)
       formData.append("genres", JSON.stringify(genres))
-      formData.append("avatar_url", avatarUrl || "")
+      formData.append("avatar_url", avatarUrl && !avatarUrl.startsWith("blob:") ? avatarUrl : "")
       if (avatarFile) {
         formData.append("profilePicture", avatarFile)
       }

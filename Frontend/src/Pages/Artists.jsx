@@ -17,7 +17,7 @@ function Artists() {
   const currentUserId = localStorage.getItem("user_id")
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [query, setQuery] = useState("")
+  const [query, setQuery] = useState("")*
 
   useEffect(() => {
     fetchUsers()

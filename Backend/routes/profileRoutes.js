@@ -13,8 +13,11 @@ import audioUpload from "../utils/audioUplaod.js";
 
 const router = express.Router();
 
-router.post("/setup", arcjetMiddleware([moderateRateLimitRule]),upload.single("profilePicture"), setupProfile);
-router.put("/update", arcjetMiddleware([moderateRateLimitRule]),upload.single("profilePicture"), updateProfile);
+router.post("/setup", arcjetMiddleware([moderateRateLimitRule]), upload.single("profilePicture"), setupProfile);
+router.put("/update", arcjetMiddleware([moderateRateLimitRule]), upload.fields([
+  { name: "profilePicture", maxCount: 1 },
+  { name: "coverPicture", maxCount: 1 },
+]), updateProfile);
 router.get("/:userId", getProfile);
 router.get("/:userId/posts", getPostsByUser);
 router.post(

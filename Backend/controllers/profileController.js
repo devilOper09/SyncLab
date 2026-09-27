@@ -18,8 +18,11 @@ export const updateProfile = async (req, res) => {
     const cleanBio = validateString(bio, "Bio", { maxLength: 500 });
     const parsedGenres = typeof genres === "string" ? JSON.parse(genres) : genres;
     const cleanGenres = validateGenres(parsedGenres);
-    const cleanAvatarUrl = validateString(avatar_url, "Avatar URL", { maxLength: 2048, escape: false });
-    const cleanCoverUrl = validateString(cover_url, "Cover URL", { maxLength: 2048, escape: false });
+    const rawAvatarUrl = validateString(avatar_url, "Avatar URL", { maxLength: 2048, escape: false });
+    // Reject blob: URLs — they are temporary browser-local object URLs, never valid for storage
+    const cleanAvatarUrl = rawAvatarUrl && !rawAvatarUrl.startsWith("blob:") ? rawAvatarUrl : null;
+    const rawCoverUrl = validateString(cover_url, "Cover URL", { maxLength: 2048, escape: false });
+    const cleanCoverUrl = rawCoverUrl && !rawCoverUrl.startsWith("blob:") ? rawCoverUrl : null;
 
     // Check username uniqueness
     const taken = await pool.query(
@@ -30,32 +33,43 @@ export const updateProfile = async (req, res) => {
       return res.status(409).json({ success: false, message: "Username is already taken." });
     }
 
-    const profile_picture = req.file?.path || null;
+    const profile_picture = req.files?.profilePicture?.[0]?.path || req.file?.path || null;
+    const cover_picture = req.files?.coverPicture?.[0]?.path || null;
+
+    // Only update avatar columns if a new file or valid URL was provided
+    const avatarValue = profile_picture || cleanAvatarUrl;
+    const coverValue = cover_picture || cleanCoverUrl;
+
+    const setClauses = [
+      "display_name = $1",
+      "username     = $2",
+      "role         = $3",
+      "bio          = $4",
+      "genres       = $5",
+    ];
+    const params = [cleanDisplayName, cleanUsername, cleanRole, cleanBio, cleanGenres];
+
+    if (avatarValue !== null) {
+      const idx = params.length + 1;
+      setClauses.push(`avatar_url = $${idx}`, `avatar = $${idx}`);
+      params.push(avatarValue);
+      const pidx = params.length + 1;
+      setClauses.push(`profile_picture = $${pidx}`);
+      params.push(profile_picture);
+    }
+    if (coverValue !== null) {
+      const cidx = params.length + 1;
+      setClauses.push(`cover_url = $${cidx}`);
+      params.push(coverValue);
+    }
+
+    const widx = params.length + 1;
+    params.push(cleanUserId);
 
     await pool.query(
-  `UPDATE SyncLabUsers 
-   SET display_name = $1, 
-       username     = $2, 
-       role         = $3, 
-       bio          = $4, 
-       genres       = $5, 
-       avatar_url   = $6, 
-       avatar       = $6, 
-       profile_picture = $7, 
-       cover_url    = $8 
-   WHERE id = $9`,
-  [
-    cleanDisplayName,
-    cleanUsername,
-    cleanRole,
-    cleanBio,
-    cleanGenres,
-    profile_picture || cleanAvatarUrl || null, // $6 — Cloudinary URL if uploaded, else preserve existing
-    profile_picture, // $7
-    cleanCoverUrl,   // $8
-    cleanUserId,     // $9
-  ]
-);
+      `UPDATE SyncLabUsers SET ${setClauses.join(", ")} WHERE id = $${widx}`,
+      params
+    );
 
     res.json({ success: true, message: "Profile updated successfully." });
   } catch (error) {
@@ -80,7 +94,8 @@ export const setupProfile = async (req, res) => {
     const cleanBio = validateString(bio, "Bio", { maxLength: 500 });
     const parsedGenres = typeof genres === "string" ? JSON.parse(genres) : genres;
     const cleanGenres = validateGenres(parsedGenres);
-    const cleanAvatarUrl = validateString(avatar_url, "Avatar URL", { maxLength: 2048, escape: false });
+    const rawAvatarUrl = validateString(avatar_url, "Avatar URL", { maxLength: 2048, escape: false });
+    const cleanAvatarUrl = rawAvatarUrl && !rawAvatarUrl.startsWith("blob:") ? rawAvatarUrl : null;
 
     // Check username uniqueness
     const taken = await pool.query(

@@ -186,6 +186,7 @@ function YourProfile() {
   const [editAvatarUrl, setEditAvatarUrl] = useState("")
   const [editAvatarFile, setEditAvatarFile] = useState(null)
   const [editCoverUrl, setEditCoverUrl] = useState("")
+  const [editCoverFile, setEditCoverFile] = useState(null)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [updatingProfile, setUpdatingProfile] = useState(false)
   const [activeMenuPostId, setActiveMenuPostId] = useState(null)
@@ -213,6 +214,9 @@ function YourProfile() {
     if (cropperCallback === setEditAvatarUrl) {
       setEditAvatarFile(file)
       setEditAvatarUrl(URL.createObjectURL(file))
+    } else if (cropperCallback === setEditCoverUrl) {
+      setEditCoverFile(file)
+      setEditCoverUrl(URL.createObjectURL(file))
     } else if (cropperCallback === setPostCoverUrl) {
       setPostCoverFile(file)
       setPostCoverUrl(URL.createObjectURL(file))
@@ -332,10 +336,16 @@ function YourProfile() {
       formData.append("role", editRole)
       formData.append("bio", editBio)
       formData.append("genres", JSON.stringify(editGenres))
-      formData.append("avatar_url", editAvatarUrl || "")
-      formData.append("cover_url", editCoverUrl || "")
+      // Only send the existing Cloudinary URL, never a blob: preview URL
+      const persistedAvatarUrl = editAvatarUrl && !editAvatarUrl.startsWith("blob:") ? editAvatarUrl : ""
+      const persistedCoverUrl = editCoverUrl && !editCoverUrl.startsWith("blob:") ? editCoverUrl : ""
+      formData.append("avatar_url", persistedAvatarUrl)
+      formData.append("cover_url", persistedCoverUrl)
       if (editAvatarFile) {
         formData.append("profilePicture", editAvatarFile)
+      }
+      if (editCoverFile) {
+        formData.append("coverPicture", editCoverFile)
       }
       const res = await api.put("/profile/update", formData, {
         headers: { "Content-Type": "multipart/form-data" }
@@ -362,6 +372,7 @@ function YourProfile() {
     setEditAvatarUrl(profile.avatar_url || "")
     setEditAvatarFile(null)
     setEditCoverUrl(profile.cover_url || "")
+    setEditCoverFile(null)
     setShowEditModal(true)
   }
 
