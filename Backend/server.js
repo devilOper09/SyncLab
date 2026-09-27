@@ -226,6 +226,17 @@ app.use("/profile", profileRoutes);
 app.use("/follow", followRoutes);
 app.use("/social", socialRoutes);
 
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    cloudinary: {
+      cloud_name: !!process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: !!process.env.CLOUDINARY_API_KEY,
+      api_secret: !!process.env.CLOUDINARY_API_SECRET,
+    },
+  });
+});
+
 app.get("/api/posts", async (req, res) => {
   try {
     const viewerId = req.query.user_id ? validateId(req.query.user_id, "User ID") : null;
